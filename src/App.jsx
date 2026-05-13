@@ -17,6 +17,8 @@ import RestaurantManagement from './pages/RestaurantManagement'
 import RiderTracking        from './pages/RiderTracking'
 import Subscription        from './pages/Subscription'
 import Promotions          from './pages/Promotions'
+import Discounts           from './pages/Discounts'
+import Coupons             from './pages/Coupons'
 import TaxConfig           from './pages/TaxConfig'
 import AttendanceReports   from './pages/AttendanceReports'
 import DuePayments         from './pages/DuePayments'
@@ -60,6 +62,8 @@ export default function App() {
           <Route path="riders"      element={<RiderTracking />} />
           <Route path="subscription" element={<Subscription />} />
           <Route path="promotions"   element={<Promotions />} />
+          <Route path="discounts"    element={<Discounts />} />
+          <Route path="coupons"      element={<Coupons />} />
           <Route path="tax-config"        element={<TaxConfig />} />
           <Route path="attendance"        element={<AttendanceReports />} />
           <Route path="due-payments"      element={<DuePayments />} />

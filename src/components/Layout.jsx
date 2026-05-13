@@ -49,6 +49,8 @@ const NAV_GROUPS = [
       { to: '/menu',          icon: '🍽️', label: 'Menu Items'       },
       { to: '/menu-config',   icon: '🍕', label: 'Addons & Variants' },
       { to: '/promotions',    icon: '🎁', label: 'Promotions'        },
+      { to: '/discounts',     icon: '🏷️', label: 'Discounts'         },
+      { to: '/coupons',       icon: '🎟️', label: 'Coupons'           },
       { to: '/tax-config',    icon: '🧾', label: 'Tax Config'        },
       { to: '/rm-categories', icon: '🗂️', label: 'RM Categories'     },
       { to: '/csv-import',    icon: '📥', label: 'CSV Import'        },
