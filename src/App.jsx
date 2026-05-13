@@ -24,6 +24,9 @@ import StaffPayments       from './pages/StaffPayments'
 import DeliveryOrders      from './pages/DeliveryOrders'
 import LoyaltyPoints       from './pages/LoyaltyPoints'
 import OnlineOrders        from './pages/OnlineOrders'
+import TableManagement     from './pages/TableManagement'
+import MenuConfig          from './pages/MenuConfig'
+import CustomerFeedback    from './pages/CustomerFeedback'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -57,6 +60,9 @@ export default function App() {
           <Route path="delivery"          element={<DeliveryOrders />} />
           <Route path="loyalty"           element={<LoyaltyPoints />} />
           <Route path="online-orders"     element={<OnlineOrders />} />
+          <Route path="tables"            element={<TableManagement />} />
+          <Route path="menu-config"       element={<MenuConfig />} />
+          <Route path="feedback"          element={<CustomerFeedback />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
