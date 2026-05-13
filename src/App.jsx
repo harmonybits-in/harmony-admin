@@ -17,6 +17,7 @@ import RestaurantManagement from './pages/RestaurantManagement'
 import RiderTracking        from './pages/RiderTracking'
 import Subscription        from './pages/Subscription'
 import Promotions          from './pages/Promotions'
+import TaxConfig           from './pages/TaxConfig'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="riders"      element={<RiderTracking />} />
           <Route path="subscription" element={<Subscription />} />
           <Route path="promotions"   element={<Promotions />} />
+          <Route path="tax-config"   element={<TaxConfig />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
