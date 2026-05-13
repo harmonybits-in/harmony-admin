@@ -29,6 +29,7 @@ const NAV_TOP = [
   { to: '/promotions',   icon: '🎁', label: 'Promotions'         },
   { to: '/tax-config',   icon: '💰', label: 'Tax Config'         },
   { to: '/attendance',   icon: '📋', label: 'Attendance'         },
+  { to: '/due-payments', icon: '💳', label: 'Due Payments'       },
   { to: '/settings',     icon: '⚙️', label: 'Settings'          },
   { to: '/subscription', icon: '💳', label: 'Subscription'       },
   { to: '/restaurants',  icon: '🏪', label: 'Restaurants'        },
