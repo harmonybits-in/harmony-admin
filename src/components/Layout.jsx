@@ -32,6 +32,8 @@ const NAV_TOP = [
   { to: '/due-payments',   icon: '💳', label: 'Due Payments'     },
   { to: '/staff-payments', icon: '💸', label: 'Staff Payments'   },
   { to: '/delivery',       icon: '🛵', label: 'Delivery Orders'  },
+  { to: '/loyalty',        icon: '⭐', label: 'Loyalty Points'   },
+  { to: '/online-orders',  icon: '📱', label: 'Online Orders'    },
   { to: '/settings',     icon: '⚙️', label: 'Settings'          },
   { to: '/subscription', icon: '💳', label: 'Subscription'       },
   { to: '/restaurants',  icon: '🏪', label: 'Restaurants'        },

@@ -1,5 +1,6 @@
 // src/pages/ItemRecipes.jsx
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { api } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 
@@ -249,7 +250,7 @@ function AreaMultiSelect({ selected, onChange }) {
 // ════════════════════════════════════════════════════════════════
 // ADD RECIPE PAGE
 // ════════════════════════════════════════════════════════════════
-function AddRecipePage({ products, rawMaterials, editProduct, onSave, onCancel }) {
+function AddRecipePage({ products, rawMaterials, editProduct, editRecipeId, rid, onSave, onCancel }) {
   const toast = useToast()
   const [selectedProductId, setSelectedProductId] = useState(editProduct?.id || null)
   const [saving, setSaving] = useState(false)
@@ -288,10 +289,25 @@ function AddRecipePage({ products, rawMaterials, editProduct, onSave, onCancel }
     if (validRows.length === 0) { toast.error('Minimum 1 raw material add karo'); return }
     setSaving(true)
     try {
-      await new Promise(r => setTimeout(r, 600)) // simulate API
-      toast.success(`✅ Recipe saved for "${selectedProduct?.name}"!`)
+      const payload = {
+        restaurantId: rid,
+        productId: selectedProductId,
+        ingredients: validRows.map(r => ({
+          rawMaterialId: r.rawMaterialId,
+          quantity: Number(r.quantity),
+          unit: r.unit,
+          areas: r.areas,
+        })),
+      }
+      if (editRecipeId) {
+        await api.put(`/inv/recipes/${editRecipeId}`, payload)
+      } else {
+        await api.post('/inv/recipes', payload)
+      }
+      toast.success(`Recipe saved for "${selectedProduct?.name}"!`)
       onSave()
-    } catch(_){ toast.error('Save failed') } finally { setSaving(false) }
+    } catch (err) { toast.error(err.message || 'Save failed') }
+    finally { setSaving(false) }
   }
 
   const usedRawIds = rows.map(r => r.rawMaterialId).filter(Boolean)
@@ -498,9 +514,8 @@ function AddRecipePage({ products, rawMaterials, editProduct, onSave, onCancel }
 // ════════════════════════════════════════════════════════════════
 // RECIPE LIST PAGE
 // ════════════════════════════════════════════════════════════════
-function RecipeListPage({ products, rawMaterials, onAdd, onEdit }) {
+function RecipeListPage({ products, rawMaterials, recipes, onAdd, onEdit, onDeleteRecipe }) {
   const toast = useToast()
-  const [recipes,      setRecipes]      = useState(MOCK_RECIPES)
   const [filterItem,   setFilterItem]   = useState('')
   const [filterCat,    setFilterCat]    = useState('')
   const [filterStatus, setFilterStatus] = useState('Created Recipes')
@@ -527,10 +542,13 @@ function RecipeListPage({ products, rawMaterials, onAdd, onEdit }) {
     return mc && ms && mcat && mst
   })
 
-  function deleteRecipe(id) {
+  async function deleteRecipe(id, recipeId) {
     if (!confirm('Delete this recipe?')) return
-    setRecipes(prev => prev.filter(r => r.id!==id))
-    toast.success('Recipe deleted')
+    try {
+      if (recipeId) await api.delete(`/inv/recipes/${recipeId}`)
+      toast.success('Recipe deleted')
+      onDeleteRecipe()
+    } catch (err) { toast.error(err.message || 'Delete failed') }
   }
 
   // Scroll category tabs
@@ -750,7 +768,7 @@ function RecipeListPage({ products, rawMaterials, onAdd, onEdit }) {
                       ✏️
                     </button>
                     {/* Delete */}
-                    <button onClick={()=>deleteRecipe(recipe.id)} title="Delete"
+                    <button onClick={()=>deleteRecipe(recipe.id, recipe.recipeId)} title="Delete"
                       style={{ background:'#f5f5f5', border:'1px solid #e8eaed',
                         borderRadius:5, padding:'4px 8px', cursor:'pointer', fontSize:13, color:'#ef4444' }}>
                       🗑
@@ -791,18 +809,61 @@ function RecipeListPage({ products, rawMaterials, onAdd, onEdit }) {
 // MAIN EXPORT
 // ════════════════════════════════════════════════════════════════
 export default function ItemRecipes() {
-  const rid = useAuthStore(s => s.restaurantId)
-  const [view,     setView]     = useState('list') // 'list' | 'add' | 'edit'
-  const [editItem, setEditItem] = useState(null)
+  const rid  = useAuthStore(s => s.restaurantId)
+  const toast = useToast()
 
-  // In real app — fetch from API
-  const products    = MOCK_PRODUCTS
-  const rawMaterials= MOCK_RAW
+  const [view,         setView]         = useState('list')
+  const [editItem,     setEditItem]     = useState(null)
+  const [editRecipeId, setEditRecipeId] = useState(null)
 
-  function handleAdd()       { setEditItem(null); setView('add')  }
-  function handleEdit(recipe){ setEditItem({id:recipe.productId,name:recipe.productName}); setView('edit') }
-  function handleBack()      { setView('list'); setEditItem(null) }
-  function handleSave()      { setView('list'); setEditItem(null) }
+  const [products,     setProducts]     = useState(MOCK_PRODUCTS)
+  const [rawMaterials, setRawMaterials] = useState(MOCK_RAW)
+  const [recipes,      setRecipes]      = useState([])
+
+  const loadData = useCallback(async () => {
+    try {
+      const [prods, raws, recs] = await Promise.all([
+        api.get(`/products?restaurantId=${rid}&size=200`).catch(() => null),
+        api.get(`/inv/raw-materials?restaurantId=${rid}`).catch(() => null),
+        api.get(`/inv/recipes?restaurantId=${rid}`).catch(() => null),
+      ])
+      if (prods) {
+        const list = Array.isArray(prods) ? prods : (prods?.content ?? [])
+        if (list.length) setProducts(list)
+      }
+      if (raws) {
+        const list = Array.isArray(raws) ? raws : (raws?.content ?? [])
+        if (list.length) setRawMaterials(list.map(rm => ({
+          ...rm,
+          units: [rm.consumptionUnit, rm.purchaseUnit].filter(Boolean),
+        })))
+      }
+      if (recs) {
+        const list = Array.isArray(recs) ? recs : (recs?.content ?? [])
+        setRecipes(list)
+      }
+    } catch (err) { toast.error('Data load failed') }
+  }, [rid])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  // Merge products + recipes → list for RecipeListPage
+  const mergedRecipes = products.map(p => {
+    const rec = recipes.find(r => r.productId === p.id)
+    return {
+      id:          p.id,
+      productId:   p.id,
+      productName: p.name,
+      category:    p.category || p.categoryName || '',
+      hasRecipe:   !!rec,
+      recipeId:    rec?.id || null,
+    }
+  })
+
+  function handleAdd()       { setEditItem(null); setEditRecipeId(null); setView('add') }
+  function handleEdit(recipe){ setEditItem({ id: recipe.productId, name: recipe.productName }); setEditRecipeId(recipe.recipeId || null); setView('edit') }
+  function handleBack()      { setView('list'); setEditItem(null); setEditRecipeId(null) }
+  function handleSave()      { loadData(); setView('list'); setEditItem(null); setEditRecipeId(null) }
 
   if (view === 'add' || view === 'edit') {
     return (
@@ -810,6 +871,8 @@ export default function ItemRecipes() {
         products={products}
         rawMaterials={rawMaterials}
         editProduct={editItem}
+        editRecipeId={editRecipeId}
+        rid={rid}
         onSave={handleSave}
         onCancel={handleBack}
       />
@@ -820,8 +883,10 @@ export default function ItemRecipes() {
     <RecipeListPage
       products={products}
       rawMaterials={rawMaterials}
+      recipes={mergedRecipes}
       onAdd={handleAdd}
       onEdit={handleEdit}
+      onDeleteRecipe={loadData}
     />
   )
 }
