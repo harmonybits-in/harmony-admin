@@ -28,8 +28,12 @@ import TableManagement     from './pages/TableManagement'
 import MenuConfig          from './pages/MenuConfig'
 import CustomerFeedback    from './pages/CustomerFeedback'
 import WhatsAppNotifications from './pages/WhatsAppNotifications'
-import CsvImport           from './pages/CsvImport'
-import QrAttendance        from './pages/QrAttendance'
+import CsvImport                from './pages/CsvImport'
+import QrAttendance             from './pages/QrAttendance'
+import RawMaterialCategories    from './pages/RawMaterialCategories'
+import DeviceManagement         from './pages/DeviceManagement'
+import Referrals                from './pages/Referrals'
+import ServiceAgreement         from './pages/ServiceAgreement'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -68,7 +72,11 @@ export default function App() {
           <Route path="feedback"          element={<CustomerFeedback />} />
           <Route path="whatsapp"          element={<WhatsAppNotifications />} />
           <Route path="csv-import"        element={<CsvImport />} />
-          <Route path="qr-attendance"     element={<QrAttendance />} />
+          <Route path="qr-attendance"          element={<QrAttendance />} />
+          <Route path="rm-categories"          element={<RawMaterialCategories />} />
+          <Route path="device-management"      element={<DeviceManagement />} />
+          <Route path="referrals"              element={<Referrals />} />
+          <Route path="service-agreement"      element={<ServiceAgreement standalone />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

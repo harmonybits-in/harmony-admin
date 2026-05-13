@@ -46,11 +46,12 @@ const NAV_GROUPS = [
   {
     key: 'menu', label: 'Menu',
     items: [
-      { to: '/menu',       icon: '🍽️', label: 'Menu Items'    },
-      { to: '/menu-config',icon: '🍕', label: 'Addons & Variants' },
-      { to: '/promotions', icon: '🎁', label: 'Promotions'    },
-      { to: '/tax-config', icon: '🧾', label: 'Tax Config'    },
-      { to: '/csv-import', icon: '📥', label: 'CSV Import'    },
+      { to: '/menu',          icon: '🍽️', label: 'Menu Items'       },
+      { to: '/menu-config',   icon: '🍕', label: 'Addons & Variants' },
+      { to: '/promotions',    icon: '🎁', label: 'Promotions'        },
+      { to: '/tax-config',    icon: '🧾', label: 'Tax Config'        },
+      { to: '/rm-categories', icon: '🗂️', label: 'RM Categories'     },
+      { to: '/csv-import',    icon: '📥', label: 'CSV Import'        },
     ],
   },
   {
@@ -84,10 +85,13 @@ const NAV_GROUPS = [
   {
     key: 'settings', label: 'Settings',
     items: [
-      { to: '/settings',     icon: '⚙️', label: 'Settings'     },
-      { to: '/subscription', icon: '💳', label: 'Subscription' },
-      { to: '/restaurants',  icon: '🏪', label: 'Restaurants'  },
-      { to: '/riders',       icon: '🛵', label: 'Rider Tracking'},
+      { to: '/settings',          icon: '⚙️', label: 'Settings'          },
+      { to: '/subscription',      icon: '💳', label: 'Subscription'      },
+      { to: '/restaurants',       icon: '🏪', label: 'Restaurants'       },
+      { to: '/riders',            icon: '🛵', label: 'Rider Tracking'    },
+      { to: '/device-management', icon: '📱', label: 'Device Management' },
+      { to: '/referrals',         icon: '🎁', label: 'Referrals'         },
+      { to: '/service-agreement', icon: '📄', label: 'Service Agreement' },
     ],
   },
 ]
