@@ -1,6 +1,6 @@
 // src/components/Layout.jsx
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useAuthStore } from '../store/authStore'
 
 // ── Full-page routes (no padding wrapper) ────────────────────────
@@ -17,32 +17,79 @@ const FULL_PAGE_PATHS = [
   '/inventory/masters/invoice',
 ]
 
-// ── Non-inventory top nav ─────────────────────────────────────────
-const NAV_TOP = [
-  { to: '/',          icon: '⊞',  label: 'Dashboard'  },
-  { to: '/bills',     icon: '🧾', label: 'Bills'       },
-  { to: '/menu',      icon: '🍽️', label: 'Menu'        },
-  { to: '/staff',     icon: '👤', label: 'Staff'       },
-  { to: '/customers', icon: '👥', label: 'Customers'   },
-  { to: '/payroll',   icon: '💰', label: 'Payroll'     },
-  { to: '/reports',   icon: '📊', label: 'Reports'     },
-  { to: '/promotions',   icon: '🎁', label: 'Promotions'         },
-  { to: '/tax-config',   icon: '💰', label: 'Tax Config'         },
-  { to: '/attendance',   icon: '📋', label: 'Attendance'         },
-  { to: '/due-payments',   icon: '💳', label: 'Due Payments'     },
-  { to: '/staff-payments', icon: '💸', label: 'Staff Payments'   },
-  { to: '/delivery',       icon: '🛵', label: 'Delivery Orders'  },
-  { to: '/loyalty',        icon: '⭐', label: 'Loyalty Points'   },
-  { to: '/online-orders',  icon: '📱', label: 'Online Orders'    },
-  { to: '/tables',         icon: '🪑', label: 'Table Management' },
-  { to: '/menu-config',    icon: '🍕', label: 'Menu Config'      },
-  { to: '/feedback',       icon: '💬', label: 'Feedback'         },
-  { to: '/whatsapp',       icon: '📲', label: 'WhatsApp'         },
-  { to: '/csv-import',     icon: '📥', label: 'CSV Import'       },
-  { to: '/settings',     icon: '⚙️', label: 'Settings'          },
-  { to: '/subscription', icon: '💳', label: 'Subscription'       },
-  { to: '/restaurants',  icon: '🏪', label: 'Restaurants'        },
-  { to: '/riders',       icon: '🛵', label: 'Rider Tracking'     },
+// ── Grouped nav structure ─────────────────────────────────────────
+const NAV_GROUPS = [
+  // Always-visible pinned items (no group header)
+  {
+    key: '_pin', pinned: true,
+    items: [
+      { to: '/',       icon: '⊞',  label: 'Dashboard', end: true },
+    ],
+  },
+  {
+    key: 'sales', label: 'Sales',
+    items: [
+      { to: '/bills',         icon: '🧾', label: 'Bills'           },
+      { to: '/online-orders', icon: '📱', label: 'Online Orders'   },
+      { to: '/delivery',      icon: '🛵', label: 'Delivery Orders' },
+      { to: '/due-payments',  icon: '💳', label: 'Due Payments'    },
+    ],
+  },
+  {
+    key: 'customers', label: 'Customers',
+    items: [
+      { to: '/customers', icon: '👥', label: 'Customers'     },
+      { to: '/loyalty',   icon: '⭐', label: 'Loyalty Points'},
+      { to: '/feedback',  icon: '💬', label: 'Feedback'      },
+    ],
+  },
+  {
+    key: 'menu', label: 'Menu',
+    items: [
+      { to: '/menu',       icon: '🍽️', label: 'Menu Items'    },
+      { to: '/menu-config',icon: '🍕', label: 'Addons & Variants' },
+      { to: '/promotions', icon: '🎁', label: 'Promotions'    },
+      { to: '/tax-config', icon: '🧾', label: 'Tax Config'    },
+      { to: '/csv-import', icon: '📥', label: 'CSV Import'    },
+    ],
+  },
+  {
+    key: 'staff', label: 'Staff',
+    items: [
+      { to: '/staff',          icon: '👤', label: 'Staff'           },
+      { to: '/attendance',     icon: '📋', label: 'Attendance'      },
+      { to: '/qr-attendance',  icon: '📲', label: 'QR Attendance'   },
+      { to: '/payroll',        icon: '💰', label: 'Payroll'         },
+      { to: '/staff-payments', icon: '💸', label: 'Staff Payments'  },
+    ],
+  },
+  {
+    key: 'tables', label: 'Dine-in',
+    items: [
+      { to: '/tables', icon: '🪑', label: 'Table Management' },
+    ],
+  },
+  {
+    key: 'analytics', label: 'Analytics',
+    items: [
+      { to: '/reports', icon: '📊', label: 'Reports' },
+    ],
+  },
+  {
+    key: 'tools', label: 'Tools',
+    items: [
+      { to: '/whatsapp', icon: '💬', label: 'WhatsApp'  },
+    ],
+  },
+  {
+    key: 'settings', label: 'Settings',
+    items: [
+      { to: '/settings',     icon: '⚙️', label: 'Settings'     },
+      { to: '/subscription', icon: '💳', label: 'Subscription' },
+      { to: '/restaurants',  icon: '🏪', label: 'Restaurants'  },
+      { to: '/riders',       icon: '🛵', label: 'Rider Tracking'},
+    ],
+  },
 ]
 
 // ── PetPooja-style Inventory sidebar tree ────────────────────────
@@ -277,6 +324,93 @@ function InventorySidebar() {
   )
 }
 
+// ── Grouped Nav (non-inventory) ───────────────────────────────────
+function GroupedNav({ location }) {
+  const [openGroups, setOpenGroups] = useState(() => {
+    const open = new Set()
+    NAV_GROUPS.forEach(g => {
+      if (g.pinned) return
+      if (g.items?.some(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))) {
+        open.add(g.key)
+      }
+    })
+    return open
+  })
+
+  function toggleGroup(key) {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  return (
+    <>
+      {NAV_GROUPS.map(group => {
+        if (group.pinned) {
+          return group.items.map(({ to, icon, label, end }) => (
+            <NavLink key={to} to={to} end={end}
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 14px', textDecoration: 'none', fontSize: 13,
+                color: isActive ? '#e53e3e' : '#333',
+                background: isActive ? '#fff5f5' : 'transparent',
+                fontWeight: isActive ? 600 : 400, transition: 'all .12s',
+              })}>
+              <span style={{ fontSize: 14 }}>{icon}</span>
+              {label}
+            </NavLink>
+          ))
+        }
+
+        const isOpen    = openGroups.has(group.key)
+        const hasActive = group.items?.some(item =>
+          item.end
+            ? location.pathname === item.to
+            : location.pathname === item.to || location.pathname.startsWith(item.to + '/')
+        )
+
+        return (
+          <div key={group.key}>
+            {/* Group header */}
+            <button onClick={() => toggleGroup(group.key)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 0,
+              padding: '6px 14px 4px', border: 'none', cursor: 'pointer',
+              background: 'transparent', textAlign: 'left',
+              marginTop: 4,
+            }}>
+              <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: hasActive ? '#e53e3e' : '#aaa',
+                textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                {group.label}
+              </span>
+              <span style={{ fontSize: 10, color: '#ccc',
+                transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                transition: 'transform .15s' }}>›</span>
+            </button>
+
+            {/* Items */}
+            {isOpen && group.items.map(({ to, icon, label, end }) => (
+              <NavLink key={to} to={to} end={end}
+                style={({ isActive }) => ({
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 14px 8px 18px', textDecoration: 'none', fontSize: 12,
+                  color: isActive ? '#e53e3e' : '#333',
+                  background: isActive ? '#fff5f5' : 'transparent',
+                  fontWeight: isActive ? 600 : 400, transition: 'all .12s',
+                  borderLeft: '2px solid transparent',
+                })}>
+                <span style={{ fontSize: 13 }}>{icon}</span>
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 // ── MainContent — padding zero for full-page routes ───────────────
 function MainContent() {
   const location = useLocation()
@@ -321,21 +455,8 @@ export default function Layout() {
         {/* ── Main nav ── */}
         <nav style={{ flex: 1, padding: '0.25rem 0' }}>
 
-          {/* Non-inventory links */}
-          {NAV_TOP.map(({ to, icon, label }) => (
-            <NavLink key={to} to={to} end={to === '/'}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 14px', textDecoration: 'none', fontSize: 13,
-                color: isActive ? '#e53e3e' : '#333',
-                background: isActive ? '#fff5f5' : 'transparent',
-                fontWeight: isActive ? 600 : 400,
-                transition: 'all .12s',
-              })}>
-              <span style={{ fontSize: 14 }}>{icon}</span>
-              {label}
-            </NavLink>
-          ))}
+          {/* Grouped nav */}
+          <GroupedNav location={location} />
 
           {/* ── Inventory parent link + expandable sidebar ── */}
           <div>

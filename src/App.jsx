@@ -29,6 +29,7 @@ import MenuConfig          from './pages/MenuConfig'
 import CustomerFeedback    from './pages/CustomerFeedback'
 import WhatsAppNotifications from './pages/WhatsAppNotifications'
 import CsvImport           from './pages/CsvImport'
+import QrAttendance        from './pages/QrAttendance'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="feedback"          element={<CustomerFeedback />} />
           <Route path="whatsapp"          element={<WhatsAppNotifications />} />
           <Route path="csv-import"        element={<CsvImport />} />
+          <Route path="qr-attendance"     element={<QrAttendance />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
