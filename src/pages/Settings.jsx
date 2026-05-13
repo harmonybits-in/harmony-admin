@@ -5,8 +5,10 @@ import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import { SkeletonLine } from '../components/Skeleton'
 
-// Tabs — Business Hours removed (backend has no support for it)
-const TABS = ['🏪 Business Profile', '🔑 Login Credentials', '📜 Legal', '⭐ Loyalty & VIP']
+const TABS = ['🏪 Business Profile', '🔑 Login Credentials', '📜 Legal', '⭐ Loyalty & VIP', '🕐 Business Hours']
+
+const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
+const DAY_SHORT = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun' }
 
 function Input({ label, value, onChange, type = 'text', placeholder = '', disabled = false, hint }) {
   return (
@@ -67,12 +69,24 @@ export default function Settings() {
   // ── Login Credentials ──
   const [creds, setCreds] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
 
-  // ── Legal — only fields that actually exist in backend ──
+  // ── Legal ──
   const [legal, setLegal] = useState({
-    gstNumber:  '',
-    fssaiLicNo: '',   // FIX: was fssaiNumber — wrong field name
+    gstNumber:         '',
+    fssaiLicNo:        '',
+    panNumber:         '',
+    registrationNumber:'',
+    taxRate:           '',
+    serviceCharge:     '',
   })
   const [legalDirty, setLegalDirty] = useState(false)
+
+  // ── Business Hours ──
+  const [hours, setHours] = useState({
+    openTime:   '09:00',
+    closeTime:  '22:00',
+    closedDays: [],
+  })
+  const [hoursDirty, setHoursDirty] = useState(false)
 
   // ── Loyalty & VIP — only fields that exist in backend ──
   const [loyalty, setLoyalty] = useState({
@@ -102,8 +116,17 @@ export default function Settings() {
           upiName:   r.upiName   || '',
         })
         setLegal({
-          gstNumber:  r.gstNumber  || '',
-          fssaiLicNo: r.fssaiLicNo || '',  // FIX: was r.fssaiNumber — never loaded
+          gstNumber:          r.gstNumber          || '',
+          fssaiLicNo:         r.fssaiLicNo         || '',
+          panNumber:          r.panNumber          || '',
+          registrationNumber: r.registrationNumber || '',
+          taxRate:            r.taxRate            ?? '',
+          serviceCharge:      r.serviceCharge      ?? '',
+        })
+        setHours({
+          openTime:   r.openTime   || '09:00',
+          closeTime:  r.closeTime  || '22:00',
+          closedDays: r.closedDays ? (typeof r.closedDays === 'string' ? r.closedDays.split(',').filter(Boolean) : r.closedDays) : [],
         })
         setLoyalty({
           loyaltyPointsPer100: r.loyaltyPointsPer100 ?? 5,
@@ -276,7 +299,7 @@ export default function Settings() {
         <Section title="📜 Legal & Compliance" dirty={legalDirty} saving={saving}
           onSave={() => saveSection(legal, setLegalDirty)}>
           {loading
-            ? [...Array(2)].map((_, i) => <SkeletonLine key={i} height={38} style={{ marginBottom: 14 }} />)
+            ? [...Array(4)].map((_, i) => <SkeletonLine key={i} height={38} style={{ marginBottom: 14 }} />)
             : (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
@@ -287,15 +310,27 @@ export default function Settings() {
                   <Input label="FSSAI License No." value={legal.fssaiLicNo}
                     onChange={upd(setLegal, setLegalDirty)('fssaiLicNo')}
                     placeholder="10020042001234" />
+                  <Input label="PAN Number" value={legal.panNumber}
+                    onChange={upd(setLegal, setLegalDirty)('panNumber')}
+                    placeholder="ABCDE1234F" />
+                  <Input label="Registration Number" value={legal.registrationNumber}
+                    onChange={upd(setLegal, setLegalDirty)('registrationNumber')}
+                    placeholder="CIN / Shop Act number" />
                 </div>
-                <div style={{ padding: '12px 14px', borderRadius: 8,
-                  background: 'var(--bg-page)', border: '1px solid var(--border)',
-                  fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 4 }}>
-                  💡 Tax rates ke liye{' '}
-                  <a href="/tax-config" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
-                    Tax Config
-                  </a>{' '}
-                  page use karo. PAN aur Registration Number future version mein add hoga.
+                <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    💰 Default Tax & Charges
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                    <Input label="Default Tax Rate (%)" value={legal.taxRate} type="number"
+                      onChange={upd(setLegal, setLegalDirty)('taxRate')}
+                      placeholder="5"
+                      hint="e.g. 5 for 5% GST" />
+                    <Input label="Service Charge (%)" value={legal.serviceCharge} type="number"
+                      onChange={upd(setLegal, setLegalDirty)('serviceCharge')}
+                      placeholder="10"
+                      hint="e.g. 10 for 10%" />
+                  </div>
                 </div>
               </>
             )}
@@ -347,6 +382,76 @@ export default function Settings() {
                     <div>
                       VIP customer banta hai →{' '}
                       <strong style={{ color: '#6366f1' }}>₹{Number(loyalty.vipThreshold || 0).toLocaleString('en-IN')} spend karne pe</strong>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+        </Section>
+      )}
+
+      {/* ── Tab 4: Business Hours ── */}
+      {tab === 4 && (
+        <Section title="🕐 Business Hours" dirty={hoursDirty} saving={saving}
+          onSave={() => saveSection(hours, setHoursDirty)}>
+          {loading
+            ? [...Array(2)].map((_, i) => <SkeletonLine key={i} height={38} style={{ marginBottom: 14 }} />)
+            : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                  <Input label="Opening Time" value={hours.openTime} type="time"
+                    onChange={e => { setHours(h => ({ ...h, openTime: e.target.value })); setHoursDirty(true) }} />
+                  <Input label="Closing Time" value={hours.closeTime} type="time"
+                    onChange={e => { setHours(h => ({ ...h, closeTime: e.target.value })); setHoursDirty(true) }} />
+                </div>
+
+                <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    🚫 Closed Days
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {DAYS.map(day => {
+                      const active = hours.closedDays.includes(day)
+                      return (
+                        <button key={day} onClick={() => {
+                          setHours(h => ({
+                            ...h,
+                            closedDays: active
+                              ? h.closedDays.filter(d => d !== day)
+                              : [...h.closedDays, day],
+                          }))
+                          setHoursDirty(true)
+                        }} style={{
+                          padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                          cursor: 'pointer', border: '1px solid var(--border)',
+                          background: active ? '#ef4444' : 'transparent',
+                          color: active ? '#fff' : 'var(--text-muted)',
+                        }}>
+                          {DAY_SHORT[day]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                    Red = band rehta hai us din
+                  </div>
+                </div>
+
+                <div style={{ padding: '14px 16px', borderRadius: 10, marginTop: 12,
+                  background: 'var(--bg-page)', border: '1px solid var(--border)', fontSize: 13 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>Preview</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div>
+                      ⏰ Timing:{' '}
+                      <strong>{hours.openTime || '--'} – {hours.closeTime || '--'}</strong>
+                    </div>
+                    <div>
+                      🚫 Closed:{' '}
+                      <strong>
+                        {hours.closedDays.length === 0
+                          ? 'Koi band din nahi'
+                          : hours.closedDays.map(d => DAY_SHORT[d]).join(', ')}
+                      </strong>
                     </div>
                   </div>
                 </div>
