@@ -20,6 +20,7 @@ import Promotions          from './pages/Promotions'
 import TaxConfig           from './pages/TaxConfig'
 import AttendanceReports   from './pages/AttendanceReports'
 import DuePayments         from './pages/DuePayments'
+import StaffPayments       from './pages/StaffPayments'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="tax-config"        element={<TaxConfig />} />
           <Route path="attendance"        element={<AttendanceReports />} />
           <Route path="due-payments"      element={<DuePayments />} />
+          <Route path="staff-payments"    element={<StaffPayments />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
