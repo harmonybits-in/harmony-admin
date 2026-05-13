@@ -27,6 +27,8 @@ import OnlineOrders        from './pages/OnlineOrders'
 import TableManagement     from './pages/TableManagement'
 import MenuConfig          from './pages/MenuConfig'
 import CustomerFeedback    from './pages/CustomerFeedback'
+import WhatsAppNotifications from './pages/WhatsAppNotifications'
+import CsvImport           from './pages/CsvImport'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -63,6 +65,8 @@ export default function App() {
           <Route path="tables"            element={<TableManagement />} />
           <Route path="menu-config"       element={<MenuConfig />} />
           <Route path="feedback"          element={<CustomerFeedback />} />
+          <Route path="whatsapp"          element={<WhatsAppNotifications />} />
+          <Route path="csv-import"        element={<CsvImport />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -37,6 +37,8 @@ const NAV_TOP = [
   { to: '/tables',         icon: '🪑', label: 'Table Management' },
   { to: '/menu-config',    icon: '🍕', label: 'Menu Config'      },
   { to: '/feedback',       icon: '💬', label: 'Feedback'         },
+  { to: '/whatsapp',       icon: '📲', label: 'WhatsApp'         },
+  { to: '/csv-import',     icon: '📥', label: 'CSV Import'       },
   { to: '/settings',     icon: '⚙️', label: 'Settings'          },
   { to: '/subscription', icon: '💳', label: 'Subscription'       },
   { to: '/restaurants',  icon: '🏪', label: 'Restaurants'        },
