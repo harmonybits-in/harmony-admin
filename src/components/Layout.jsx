@@ -31,6 +31,7 @@ const NAV_TOP = [
   { to: '/attendance',   icon: '📋', label: 'Attendance'         },
   { to: '/due-payments',   icon: '💳', label: 'Due Payments'     },
   { to: '/staff-payments', icon: '💸', label: 'Staff Payments'   },
+  { to: '/delivery',       icon: '🛵', label: 'Delivery Orders'  },
   { to: '/settings',     icon: '⚙️', label: 'Settings'          },
   { to: '/subscription', icon: '💳', label: 'Subscription'       },
   { to: '/restaurants',  icon: '🏪', label: 'Restaurants'        },
