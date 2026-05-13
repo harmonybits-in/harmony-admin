@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "harmoneyeats-prod"
+  },
+  "targets": {
+    "harmoneyeats-prod": {
+      "hosting": {
+        "harmoney-admin": [
+          "harmoney-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
