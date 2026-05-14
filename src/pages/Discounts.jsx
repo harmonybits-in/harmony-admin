@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { discountApi } from '../api/client'
+import { discountApi, menuApi } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import { SkeletonTable } from '../components/Skeleton'
@@ -43,6 +43,35 @@ function Chk({ label, checked, onChange }) {
     </label>
   )
 }
+
+function MultiCheckList({ label, items, selected, onChange, emptyText = 'Koi item nahi' }) {
+  const toggle = id => {
+    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]
+    onChange(next)
+  }
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {label && <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500 }}>{label}</label>}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', padding: '6px 8px', background: 'var(--bg-page)' }}>
+        {items.length === 0
+          ? <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 0' }}>{emptyText}</div>
+          : items.map(item => (
+            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12,
+              cursor: 'pointer', padding: '3px 0', color: 'var(--text)' }}>
+              <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} />
+              {item.name}
+            </label>
+          ))
+        }
+      </div>
+      {selected.length > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 3 }}>{selected.length} selected</div>
+      )}
+    </div>
+  )
+}
+
+const ORDER_TYPES = ['ALL', 'DINE_IN', 'DELIVERY', 'PICKUP', 'ONLINE']
 
 function Badge({ text, color = '#6366f1' }) {
   return (
@@ -89,6 +118,11 @@ function Modal({ title, onClose, onSubmit, saving, children }) {
 const BLANK = {
   name: '', title: '', type: 'PERCENTAGE', platform: 'ALL',
   amount: '', percentage: '', minOrderAmount: '', maxDiscountCap: '',
+  orderTypes: ['ALL'],
+  categoryFilter: 'ALL',
+  categoryIds: [],
+  productFilter: 'ALL',
+  productIds: [],
   isActive: true,
 }
 
@@ -97,26 +131,35 @@ const TYPES = [
   { value: 'FLAT',       label: 'Flat Amount (₹)' },
   { value: 'BOGO',       label: 'Buy One Get One (BOGO)' },
 ]
-const PLATFORMS    = ['ALL', 'POS', 'ONLINE']
-const APPLICABLE   = ['ALL', 'DINE_IN', 'DELIVERY', 'TAKEAWAY', 'ONLINE']
-const TYPE_COLOR   = { PERCENTAGE: '#6366f1', FLAT: '#f59e0b', BOGO: '#10b981' }
+const PLATFORMS  = ['ALL', 'POS', 'ONLINE']
+const TYPE_COLOR = { PERCENTAGE: '#6366f1', FLAT: '#f59e0b', BOGO: '#10b981' }
 
 export default function Discounts() {
   const rid   = useAuthStore(s => s.restaurantId)
   const toast = useToast()
 
-  const [items,   setItems]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modal,   setModal]   = useState(null)
-  const [form,    setForm]    = useState(BLANK)
-  const [saving,  setSaving]  = useState(false)
-  const [deleteId, setDeleteId] = useState(null)
+  const [items,      setItems]      = useState([])
+  const [categories, setCategories] = useState([])
+  const [products,   setProducts]   = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [modal,      setModal]      = useState(null)
+  const [form,       setForm]       = useState(BLANK)
+  const [saving,     setSaving]     = useState(false)
+  const [deleteId,   setDeleteId]   = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await discountApi.getAll(rid)
-      setItems(Array.isArray(data) ? data : (data?.content ?? []))
+      const [dData, catData, prodData] = await Promise.allSettled([
+        discountApi.getAll(rid),
+        menuApi.getCategories(rid),
+        menuApi.getProducts(rid),
+      ])
+      const d = dData.status === 'fulfilled' ? dData.value : null
+      setItems(Array.isArray(d) ? d : (d?.content ?? []))
+      setCategories(catData.status === 'fulfilled' && Array.isArray(catData.value) ? catData.value : [])
+      const prodVal = prodData.status === 'fulfilled' ? prodData.value : null
+      setProducts(Array.isArray(prodVal) ? prodVal : (prodVal?.content ?? []))
     } catch { setItems([]) }
     finally { setLoading(false) }
   }, [rid])
@@ -127,14 +170,38 @@ export default function Discounts() {
   const setChk = k => e => setForm(f => ({ ...f, [k]: e.target.checked }))
 
   function openCreate() { setForm({ ...BLANK, restaurantId: rid }); setModal({ mode: 'create' }) }
-  function openEdit(d)  { setForm({ ...d }); setModal({ mode: 'edit', id: d.id }) }
+  function openEdit(d) {
+    const existingTypes = Array.isArray(d.applicableOn) ? d.applicableOn : [d.applicableOn || 'ALL']
+    const orderTypes = existingTypes.filter(a => ORDER_TYPES.includes(a))
+    setForm({
+      ...d,
+      orderTypes:     orderTypes.length > 0 ? orderTypes : ['ALL'],
+      categoryFilter: existingTypes.includes('CATEGORY') ? 'SPECIFIC' : 'ALL',
+      categoryIds:    d.categoryIds ?? [],
+      productFilter:  existingTypes.includes('PRODUCT') ? 'SPECIFIC' : 'ALL',
+      productIds:     d.productIds ?? [],
+    })
+    setModal({ mode: 'edit', id: d.id })
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.name?.trim()) { toast.error('Name required'); return }
     setSaving(true)
     try {
-      const body = { ...form, restaurantId: rid }
+      const orderPart = form.orderTypes.includes('ALL') ? ['ALL'] : form.orderTypes
+      const applicableOn = [
+        ...orderPart,
+        ...(form.categoryFilter === 'SPECIFIC' && form.categoryIds.length > 0 ? ['CATEGORY'] : []),
+        ...(form.productFilter  === 'SPECIFIC' && form.productIds.length  > 0 ? ['PRODUCT']  : []),
+      ]
+      const body = {
+        ...form,
+        restaurantId: rid,
+        applicableOn,
+        categoryIds: form.categoryFilter === 'SPECIFIC' ? form.categoryIds : [],
+        productIds:  form.productFilter  === 'SPECIFIC' ? form.productIds  : [],
+      }
       if (modal.mode === 'create') { await discountApi.create(body);       toast.success('Discount created!') }
       else                         { await discountApi.update(modal.id, body); toast.success('Discount updated!') }
       setModal(null); load()
@@ -249,7 +316,71 @@ export default function Discounts() {
             <Inp label="Max Cap (₹)" value={form.maxDiscountCap} onChange={set('maxDiscountCap')}
               type="number" placeholder="0 = no cap" />
           </div>
-          <Sel label="Applicable On" value={form.applicableOn} onChange={set('applicableOn')} options={APPLICABLE} />
+          {/* Order Type */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>Order Type</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ORDER_TYPES.map(t => {
+                const active = form.orderTypes.includes(t)
+                const disabled = t !== 'ALL' && form.orderTypes.includes('ALL')
+                return (
+                  <button key={t} type="button" disabled={disabled} onClick={() => {
+                    setForm(f => {
+                      if (t === 'ALL') return { ...f, orderTypes: ['ALL'] }
+                      const cur = f.orderTypes.filter(x => x !== 'ALL')
+                      const next = cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t]
+                      return { ...f, orderTypes: next.length === 0 ? ['ALL'] : next }
+                    })
+                  }} style={{
+                    padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                    border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                    background: active ? 'var(--accent)' : 'transparent',
+                    color: active ? '#fff' : disabled ? 'var(--text-muted)' : 'var(--text)',
+                    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1,
+                  }}>{t}</button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Category Filter */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>Categories</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+              {['ALL', 'SPECIFIC'].map(v => (
+                <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer' }}>
+                  <input type="radio" name="catFilter" value={v} checked={form.categoryFilter === v}
+                    onChange={() => setForm(f => ({ ...f, categoryFilter: v, categoryIds: [] }))} />
+                  {v === 'ALL' ? 'Sab Categories' : 'Specific Categories'}
+                </label>
+              ))}
+            </div>
+            {form.categoryFilter === 'SPECIFIC' && (
+              <MultiCheckList items={categories} selected={form.categoryIds}
+                onChange={ids => setForm(f => ({ ...f, categoryIds: ids }))}
+                emptyText="Koi category nahi mili" />
+            )}
+          </div>
+
+          {/* Product Filter */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>Products</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+              {['ALL', 'SPECIFIC'].map(v => (
+                <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer' }}>
+                  <input type="radio" name="prodFilter" value={v} checked={form.productFilter === v}
+                    onChange={() => setForm(f => ({ ...f, productFilter: v, productIds: [] }))} />
+                  {v === 'ALL' ? 'Sab Products' : 'Specific Products'}
+                </label>
+              ))}
+            </div>
+            {form.productFilter === 'SPECIFIC' && (
+              <MultiCheckList items={products} selected={form.productIds}
+                onChange={ids => setForm(f => ({ ...f, productIds: ids }))}
+                emptyText="Koi product nahi mila" />
+            )}
+          </div>
+
           <Chk label="Active" checked={form.isActive} onChange={setChk('isActive')} />
         </Modal>
       )}

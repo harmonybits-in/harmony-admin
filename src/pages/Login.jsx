@@ -33,6 +33,7 @@ export default function Login() {
   const [loading, setLoading]   = useState(false)
   const [otpSent, setOtpSent]   = useState(false)
   const [error, setError]       = useState('')
+  const [showPwd, setShowPwd]   = useState(false)
 
   const isEmail = identifier.includes('@')
   const isPhone = !isEmail && identifier.replace(/\D/g, '').length >= 10
@@ -210,8 +211,18 @@ export default function Login() {
             {!useOtp && (
               <div style={{ marginBottom: '1.25rem' }}>
                 <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>Password</label>
-                <input type="password" value={password} onChange={e => { setPassword(e.target.value); setError('') }}
-                  placeholder="••••••••" autoFocus autoComplete="current-password" style={inp} />
+                <div style={{ position: 'relative' }}>
+                  <input type={showPwd ? 'text' : 'password'} value={password}
+                    onChange={e => { setPassword(e.target.value); setError('') }}
+                    placeholder="••••••••" autoFocus autoComplete="current-password"
+                    style={{ ...inp, paddingRight: 52 }} />
+                  <button type="button" onClick={() => setShowPwd(v => !v)}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer', fontSize: 11,
+                      color: 'var(--text-muted)', fontWeight: 600, padding: '2px 4px' }}>
+                    {showPwd ? 'Hide' : 'Show'}
+                  </button>
+                </div>
               </div>
             )}
 
