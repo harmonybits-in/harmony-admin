@@ -160,6 +160,9 @@ export default function Coupons() {
         usageLimit:   Number(form.usageLimit)   || 0,
         perUserLimit: Number(form.perUserLimit)  || 1,
         code: form.code.toUpperCase().trim(),
+        applicableOn: Array.isArray(form.applicableOn)
+          ? form.applicableOn
+          : [form.applicableOn || 'ALL'],
       }
       if (modal.mode === 'create') { await couponApi.create(body);          toast.success('Coupon created!') }
       else                         { await couponApi.update(modal.id, body); toast.success('Coupon updated!') }
