@@ -144,6 +144,20 @@ export const adminApi = {
   deactivateSub:   (id)           => api.delete(`/admin/restaurants/${id}/subscription`),
 }
 
+// ── Leave Management ─────────────────────────────────────────────
+export const leaveApi = {
+  getPolicy:      (rid)            => api.get(`/leave/policy?restaurantId=${rid}`),
+  updatePolicy:   (rid, body)      => api.put(`/leave/policy?restaurantId=${rid}`, body),
+  getRequests:    (rid, params)    => api.get(`/leave/requests?restaurantId=${rid}${params||''}`),
+  applyLeave:     (body)           => api.post('/leave/requests', body),
+  approve:        (id, notes)      => api.patch(`/leave/requests/${id}/approve`, { notes }),
+  reject:         (id, notes)      => api.patch(`/leave/requests/${id}/reject`, { notes }),
+  cancel:         (id)             => api.patch(`/leave/requests/${id}/cancel`),
+  getCalendar:    (rid, year, mon) => api.get(`/leave/calendar?restaurantId=${rid}&year=${year}&month=${mon}`),
+  getBalance:     (rid, year)      => api.get(`/leave/balance?restaurantId=${rid}&year=${year}`),
+  getPendingCount:(rid)            => api.get(`/leave/pending-count?restaurantId=${rid}`),
+}
+
 // ── Plans ─────────────────────────────────────────────────────────
 export const plansApi = {
   getActive: () => api.get('/plans'),

@@ -28,6 +28,7 @@ import LoyaltyPoints       from './pages/LoyaltyPoints'
 import OnlineOrders        from './pages/OnlineOrders'
 import TableManagement     from './pages/TableManagement'
 import MenuConfig          from './pages/MenuConfig'
+import MenuCategories      from './pages/MenuCategories'
 import CustomerFeedback    from './pages/CustomerFeedback'
 import WhatsAppNotifications from './pages/WhatsAppNotifications'
 import CsvImport                from './pages/CsvImport'
@@ -36,6 +37,7 @@ import RawMaterialCategories    from './pages/RawMaterialCategories'
 import DeviceManagement         from './pages/DeviceManagement'
 import Referrals                from './pages/Referrals'
 import ServiceAgreement         from './pages/ServiceAgreement'
+import Leave                   from './pages/Leave.jsx'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -73,6 +75,7 @@ export default function App() {
           <Route path="online-orders"     element={<OnlineOrders />} />
           <Route path="tables"            element={<TableManagement />} />
           <Route path="menu-config"       element={<MenuConfig />} />
+          <Route path="menu-categories"   element={<MenuCategories />} />
           <Route path="feedback"          element={<CustomerFeedback />} />
           <Route path="whatsapp"          element={<WhatsAppNotifications />} />
           <Route path="csv-import"        element={<CsvImport />} />
@@ -81,6 +84,7 @@ export default function App() {
           <Route path="device-management"      element={<DeviceManagement />} />
           <Route path="referrals"              element={<Referrals />} />
           <Route path="service-agreement"      element={<ServiceAgreement standalone />} />
+          <Route path="leave"                  element={<Leave />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

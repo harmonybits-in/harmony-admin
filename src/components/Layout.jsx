@@ -1,7 +1,8 @@
 // src/components/Layout.jsx
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { leaveApi } from '../api/client'
 
 // ── Full-page routes (no padding wrapper) ────────────────────────
 const FULL_PAGE_PATHS = [
@@ -46,8 +47,9 @@ const NAV_GROUPS = [
   {
     key: 'menu', label: 'Menu',
     items: [
-      { to: '/menu',          icon: '🍽️', label: 'Menu Items'       },
-      { to: '/menu-config',   icon: '🍕', label: 'Addons & Variants' },
+      { to: '/menu',            icon: '🍽️', label: 'Menu Items'       },
+      { to: '/menu-categories', icon: '📋', label: 'Categories'        },
+      { to: '/menu-config',     icon: '🍕', label: 'Addons & Variants' },
       { to: '/promotions',    icon: '🎁', label: 'Promotions'        },
       { to: '/discounts',     icon: '🏷️', label: 'Discounts'         },
       { to: '/coupons',       icon: '🎟️', label: 'Coupons'           },
@@ -64,6 +66,7 @@ const NAV_GROUPS = [
       { to: '/qr-attendance',  icon: '📲', label: 'QR Attendance'   },
       { to: '/payroll',        icon: '💰', label: 'Payroll'         },
       { to: '/staff-payments', icon: '💸', label: 'Staff Payments'  },
+      { to: '/leave',          icon: '🏖️', label: 'Leave Management', badge: 'leave' },
     ],
   },
   {
@@ -331,7 +334,7 @@ function InventorySidebar() {
 }
 
 // ── Grouped Nav (non-inventory) ───────────────────────────────────
-function GroupedNav({ location }) {
+function GroupedNav({ location, leavePendingCount }) {
   const [openGroups, setOpenGroups] = useState(() => {
     const open = new Set()
     NAV_GROUPS.forEach(g => {
@@ -396,7 +399,7 @@ function GroupedNav({ location }) {
             </button>
 
             {/* Items */}
-            {isOpen && group.items.map(({ to, icon, label, end }) => (
+            {isOpen && group.items.map(({ to, icon, label, end, badge }) => (
               <NavLink key={to} to={to} end={end}
                 style={({ isActive }) => ({
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -407,7 +410,15 @@ function GroupedNav({ location }) {
                   borderLeft: '2px solid transparent',
                 })}>
                 <span style={{ fontSize: 13 }}>{icon}</span>
-                {label}
+                <span style={{ flex: 1 }}>{label}</span>
+                {badge === 'leave' && leavePendingCount > 0 && (
+                  <span style={{
+                    background: '#f59e0b', color: '#fff', borderRadius: '50%',
+                    width: 16, height: 16, fontSize: 9, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>{leavePendingCount > 9 ? '9+' : leavePendingCount}</span>
+                )}
               </NavLink>
             ))}
           </div>
@@ -430,11 +441,19 @@ function MainContent() {
 
 // ════════════════════════════════════════════════════════════════
 export default function Layout() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, restaurantId } = useAuthStore()
   const navigate  = useNavigate()
   const location  = useLocation()
+  const [leavePendingCount, setLeavePendingCount] = useState(0)
 
   const isInventory = location.pathname.startsWith('/inventory')
+
+  useEffect(() => {
+    if (!restaurantId) return
+    leaveApi.getPendingCount(restaurantId)
+      .then(res => setLeavePendingCount(res?.count || res || 0))
+      .catch(() => setLeavePendingCount(0))
+  }, [restaurantId, location.pathname])
 
   function handleLogout() {
     logout()
@@ -462,7 +481,7 @@ export default function Layout() {
         <nav style={{ flex: 1, padding: '0.25rem 0' }}>
 
           {/* Grouped nav */}
-          <GroupedNav location={location} />
+          <GroupedNav location={location} leavePendingCount={leavePendingCount} />
 
           {/* ── Inventory parent link + expandable sidebar ── */}
           <div>
