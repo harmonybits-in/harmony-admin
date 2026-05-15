@@ -57,16 +57,37 @@ export const billApi = {
 
 // ── Staff ────────────────────────────────────────────────────────
 export const staffApi = {
-  getAll:     (rid, params = '') => api.get(`/staff?restaurantId=${rid}&${params}`),
-  create:     (body) => api.post('/staff', body),
-  update:     (id, body) => api.put(`/staff/${id}`, body),
-  deactivate: (id) => api.delete(`/staff/${id}`),
+  getAll:                (rid, params = '') => api.get(`/staff?restaurantId=${rid}&${params}`),
+  create:                (body) => api.post('/staff', body),
+  update:                (id, body) => api.put(`/staff/${id}`, body),
+  deactivate:            (id) => api.delete(`/staff/${id}`),
+  setAttendancePermission: (id, allowed) => api.patch(`/staff/${id}/attendance-permission?allowed=${allowed}`),
+  setPasscode:             (id, passcode) => api.patch(`/staff/${id}/passcode`, { passcode }),
+}
+
+// ── Staff Custom Roles ───────────────────────────────────────────
+export const staffRoleApi = {
+  getAll:       (rid) => api.get(`/staff-roles?restaurantId=${rid}`),
+  getActive:    (rid) => api.get(`/staff-roles?restaurantId=${rid}&active=true`),
+  create:       (body) => api.post('/staff-roles', body),
+  update:       (id, body) => api.put(`/staff-roles/${id}`, body),
+  toggleActive: (id, active) => api.patch(`/staff-roles/${id}/active?active=${active}`),
+  delete:       (id) => api.delete(`/staff-roles/${id}`),
 }
 
 // ── Customers ────────────────────────────────────────────────────
 export const customerApi = {
-  getAll:  (rid, params = '') => api.get(`/customers?restaurantId=${rid}&${params}`),
-  getByPhone: (phone, rid) => api.get(`/customers/${phone}?restaurantId=${rid}`),
+  getAll:     (rid, params = '') => api.get(`/customers?restaurantId=${rid}&${params}`),
+  getByPhone: (phone, rid)       => api.get(`/customers/${phone}?restaurantId=${rid}`),
+  getBills:   (customerId, page = 0) => api.get(`/bills?customerId=${customerId}&page=${page}&size=10`),
+  getFeedback:(phone)            => api.get(`/feedback?customerPhone=${phone}`),
+}
+
+// ── Feedback ─────────────────────────────────────────────────────
+export const feedbackApi = {
+  getAll:   (rid)          => api.get(`/feedback`),
+  respond:  (id, response) => api.patch(`/feedback/${id}/respond`, { response }),
+  aiReply:  (id)           => api.post(`/feedback/${id}/ai-reply`, {}),
 }
 
 // ── Menu ─────────────────────────────────────────────────────────

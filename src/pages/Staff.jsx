@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { staffApi } from '../api/client'
+import { api, staffApi, staffRoleApi } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import { SkeletonTable } from '../components/Skeleton'
@@ -34,6 +34,9 @@ const SAL_LABEL = {
 const BLANK = {
   name:'', phone:'', email:'', address:'', profilePhotoUrl:'',
   roles:['CASHIER'],
+  customRoleName:'',
+  overtimeEnabled: false,
+  overtimeMultiplier: 1.5,
   employmentType:'FULL_TIME',
   salaryType:'FIXED',
   baseSalary:0, hourlyRate:0, commissionPercent:0,
@@ -123,9 +126,292 @@ function FSelect({ label, value, onChange, options, labels={} }) {
   )
 }
 
+// ── Manage Roles Modal ────────────────────────────────────────────
+const COLOR_OPTIONS = [
+  '#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6',
+  '#8b5cf6','#ec4899','#06b6d4','#14b8a6','#84cc16',
+]
+
+function ManageRolesModal({ rid, onClose, toast }) {
+  const [roles,    setRoles]    = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [newName,  setNewName]  = useState('')
+  const [newColor, setNewColor] = useState(COLOR_OPTIONS[0])
+  const [adding,   setAdding]   = useState(false)
+  const [editId,   setEditId]   = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editColor,setEditColor]= useState('')
+  const [saving,   setSaving]   = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try { setRoles(await staffRoleApi.getAll(rid)) }
+    catch { setRoles([]) }
+    finally { setLoading(false) }
+  }, [rid])
+
+  useEffect(() => { load() }, [load])
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    setAdding(true)
+    try {
+      await staffRoleApi.create({ name: newName.trim(), colorHex: newColor })
+      toast.success(`Role "${newName.trim()}" added`)
+      setNewName(''); load()
+    } catch (err) { toast.error(err.message || 'Failed') }
+    finally { setAdding(false) }
+  }
+
+  function openEdit(r) { setEditId(r.id); setEditName(r.name); setEditColor(r.colorHex || COLOR_OPTIONS[0]) }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await staffRoleApi.update(editId, { name: editName.trim(), colorHex: editColor })
+      toast.success('Role updated'); setEditId(null); load()
+    } catch (err) { toast.error(err.message || 'Failed') }
+    finally { setSaving(false) }
+  }
+
+  async function toggle(r) {
+    try {
+      await staffRoleApi.toggleActive(r.id, !r.active)
+      toast.success(r.active ? `"${r.name}" deactivated` : `"${r.name}" activated`); load()
+    } catch { toast.error('Failed') }
+  }
+
+  const inpStyle = {
+    padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border)',
+    background: 'var(--bg-page)', color: 'var(--text)', fontSize: 13, boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:600,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target===e.currentTarget && onClose()}>
+      <div style={{ background:'var(--bg-card)', borderRadius:12, padding:24,
+        width:'100%', maxWidth:480, maxHeight:'85vh', overflow:'auto',
+        boxShadow:'0 8px 40px rgba(0,0,0,0.4)' }}>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <h3 style={{ margin:0, fontSize:16, fontWeight:700 }}>🎭 Manage Staff Roles</h3>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20,
+            cursor:'pointer', color:'var(--text-muted)' }}>×</button>
+        </div>
+
+        {/* Add new role */}
+        <form onSubmit={handleAdd} style={{ display:'flex', gap:8, marginBottom:20, alignItems:'flex-end' }}>
+          <div style={{ flex:1 }}>
+            <label style={{ display:'block', fontSize:11, color:'var(--text-muted)', marginBottom:4, fontWeight:600 }}>
+              New Role Name
+            </label>
+            <input value={newName} onChange={e=>setNewName(e.target.value)}
+              placeholder="e.g. Barista, Receptionist…" style={{ ...inpStyle, width:'100%' }} />
+          </div>
+          <div>
+            <label style={{ display:'block', fontSize:11, color:'var(--text-muted)', marginBottom:4, fontWeight:600 }}>Color</label>
+            <div style={{ display:'flex', gap:4 }}>
+              {COLOR_OPTIONS.map(c => (
+                <button key={c} type="button" onClick={()=>setNewColor(c)}
+                  style={{ width:20, height:20, borderRadius:'50%', background:c, border:newColor===c?'2px solid #fff':'2px solid transparent',
+                    cursor:'pointer', flexShrink:0, outline: newColor===c?`2px solid ${c}`:'none' }} />
+              ))}
+            </div>
+          </div>
+          <button type="submit" disabled={adding || !newName.trim()}
+            style={{ padding:'8px 14px', borderRadius:7, border:'none', fontSize:12, fontWeight:600,
+              background:adding||!newName.trim()?'var(--border)':'var(--accent)', color:'#fff',
+              cursor:adding||!newName.trim()?'not-allowed':'pointer', whiteSpace:'nowrap' }}>
+            {adding?'Adding…':'+ Add'}
+          </button>
+        </form>
+
+        {/* List */}
+        {loading ? (
+          <div style={{ textAlign:'center', padding:24, color:'var(--text-muted)' }}>Loading…</div>
+        ) : roles.length === 0 ? (
+          <div style={{ textAlign:'center', padding:24, color:'var(--text-muted)', fontSize:13 }}>
+            Koi custom role nahi hai — upar se add karo
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {roles.map(r => (
+              <div key={r.id} style={{ display:'flex', alignItems:'center', gap:10,
+                padding:'10px 12px', borderRadius:8, border:'1px solid var(--border)',
+                background:'var(--bg-page)', opacity: r.active ? 1 : 0.5 }}>
+
+                {editId === r.id ? (
+                  <form onSubmit={handleSaveEdit} style={{ display:'flex', gap:8, flex:1, alignItems:'center' }}>
+                    <input value={editName} onChange={e=>setEditName(e.target.value)}
+                      style={{ ...inpStyle, flex:1 }} autoFocus />
+                    <div style={{ display:'flex', gap:3 }}>
+                      {COLOR_OPTIONS.map(c => (
+                        <button key={c} type="button" onClick={()=>setEditColor(c)}
+                          style={{ width:16, height:16, borderRadius:'50%', background:c, border:'none',
+                            cursor:'pointer', outline: editColor===c?`2px solid ${c}`:'none' }} />
+                      ))}
+                    </div>
+                    <button type="submit" disabled={saving}
+                      style={{ padding:'5px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:600,
+                        background:'var(--accent)', color:'#fff', cursor:'pointer' }}>
+                      {saving?'…':'Save'}
+                    </button>
+                    <button type="button" onClick={()=>setEditId(null)}
+                      style={{ padding:'5px 10px', borderRadius:6, border:'1px solid var(--border)',
+                        background:'transparent', color:'var(--text-muted)', cursor:'pointer', fontSize:11 }}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <span style={{ width:12, height:12, borderRadius:'50%', background: r.colorHex||'#6366f1',
+                      flexShrink:0, display:'inline-block' }} />
+                    <span style={{ flex:1, fontSize:13, fontWeight:600,
+                      textDecoration: r.active?'none':'line-through' }}>{r.name}</span>
+                    {!r.active && <span style={{ fontSize:10, color:'#ef4444', fontWeight:600 }}>Inactive</span>}
+                    <button onClick={()=>openEdit(r)}
+                      style={{ padding:'4px 10px', borderRadius:6, fontSize:11, border:'1px solid var(--border)',
+                        background:'transparent', color:'var(--text-muted)', cursor:'pointer' }}>Edit</button>
+                    <button onClick={()=>toggle(r)}
+                      style={{ padding:'4px 10px', borderRadius:6, fontSize:11, border:`1px solid ${r.active?'#ef444440':'#10b98140'}`,
+                        background:'transparent', color: r.active?'#ef4444':'#10b981', cursor:'pointer' }}>
+                      {r.active?'Deactivate':'Activate'}
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Passcode Modal ────────────────────────────────────────────────
+function PasscodeModal({ staff, onClose, onDone, toast }) {
+  const [pin,     setPin]     = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [show,    setShow]    = useState(false)
+
+  const valid = /^\d{4,6}$/.test(pin)
+  const match = pin === confirm
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!valid)  return toast.error('Passcode 4-6 digit number hona chahiye')
+    if (!match)  return toast.error('Dono passcode match nahi kar rahe')
+    setSaving(true)
+    try {
+      await staffApi.setPasscode(staff.id, pin)
+      toast.success(`🔑 Passcode set for ${staff.name}`)
+      onDone()
+    } catch (err) {
+      toast.error(err.message || 'Failed to set passcode')
+    } finally { setSaving(false) }
+  }
+
+  const inpStyle = {
+    width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
+    background: 'var(--bg-page)', color: 'var(--text)', fontSize: 20,
+    letterSpacing: 8, textAlign: 'center', fontWeight: 700, boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 600,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 28,
+        width: '100%', maxWidth: 360, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🔑 Set Passcode</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20,
+            cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
+        </div>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>
+          <strong style={{ color: 'var(--text)' }}>{staff.name}</strong> ke liye 4-6 digit passcode set karo.
+          Yeh device login ke liye use hoga.
+        </p>
+
+        <form onSubmit={handleSave}>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
+              New Passcode (4-6 digits)
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={show ? 'text' : 'password'}
+                inputMode="numeric"
+                pattern="\d{4,6}"
+                maxLength={6}
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••"
+                style={{ ...inpStyle, borderColor: pin && !valid ? '#ef4444' : 'var(--border)' }}
+                autoFocus
+              />
+            </div>
+            {pin && !valid && (
+              <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>4 se 6 digits required</div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
+              Confirm Passcode
+            </label>
+            <input
+              type={show ? 'text' : 'password'}
+              inputMode="numeric"
+              maxLength={6}
+              value={confirm}
+              onChange={e => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="••••"
+              style={{ ...inpStyle,
+                borderColor: confirm && !match ? '#ef4444' : confirm && match ? '#10b981' : 'var(--border)' }}
+            />
+            {confirm && !match && (
+              <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>Passcode match nahi kar raha</div>
+            )}
+            {confirm && match && valid && (
+              <div style={{ fontSize: 11, color: '#10b981', marginTop: 4 }}>✓ Match</div>
+            )}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
+            color: 'var(--text-muted)', marginBottom: 20, cursor: 'pointer' }}>
+            <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />
+            Show digits
+          </label>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button type="button" onClick={onClose}
+              style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 13 }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={saving || !valid || !match}
+              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
+                background: saving || !valid || !match ? 'var(--border)' : 'var(--accent)', color: '#fff',
+                cursor: saving || !valid || !match ? 'not-allowed' : 'pointer' }}>
+              {saving ? 'Saving…' : '💾 Save'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ═════════════════════════════════════════════════════════════════
 export default function Staff() {
-  const { restaurantId: rid } = useAuthStore()
+  const { restaurantId: rid, user } = useAuthStore()
+  const isOwnerOrAdmin = user?.role === 'OWNER' || user?.role === 'SUPER_ADMIN'
   const toast   = useToast()
   const [staff,    setStaff]    = useState([])
   const [loading,  setLoading]  = useState(true)
@@ -134,8 +420,13 @@ export default function Staff() {
   const [panel,    setPanel]    = useState(false)
   const [editId,   setEditId]   = useState(null)
   const [form,     setForm]     = useState(BLANK)
-  const [saving,   setSaving]   = useState(false)
-  const [tab,      setTab]      = useState('basic') // basic | salary | docs
+  const [saving,         setSaving]         = useState(false)
+  const [tab,            setTab]            = useState('basic') // basic | salary | docs
+  const [passcodeTarget, setPasscodeTarget] = useState(null)
+  const [showRolesModal, setShowRolesModal] = useState(false)
+  const [customRoles,    setCustomRoles]    = useState([]) // active custom roles
+  const [restOpenTime,   setRestOpenTime]   = useState('09:00')
+  const [restCloseTime,  setRestCloseTime]  = useState('21:00')
 
   // ── Load ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -147,7 +438,18 @@ export default function Staff() {
     finally { setLoading(false) }
   }, [rid])
 
-  useEffect(() => { load() }, [])
+  const loadCustomRoles = useCallback(async () => {
+    try { setCustomRoles(await staffRoleApi.getActive(rid)) }
+    catch { setCustomRoles([]) }
+  }, [rid])
+
+  useEffect(() => {
+    load(); loadCustomRoles()
+    api.get(`/restaurants/${rid}`).then(r => {
+      if (r?.openTime)  setRestOpenTime(r.openTime)
+      if (r?.closeTime) setRestCloseTime(r.closeTime)
+    }).catch(() => {})
+  }, [])
 
   // ── Filter ────────────────────────────────────────────────────
   const filtered = staff.filter(s => {
@@ -170,6 +472,9 @@ export default function Staff() {
       profilePhotoUrl:      s.profilePhotoUrl||'',
       // roles: backend returns Set<StaffRole> as array
       roles:                Array.isArray(s.roles) ? s.roles : (s.role ? [s.role] : ['CASHIER']),
+      customRoleName:       s.customRoleName||'',
+      overtimeEnabled:      s.overtimeEnabled||false,
+      overtimeMultiplier:   s.overtimeMultiplier||1.5,
       employmentType:       s.employmentType||'FULL_TIME',
       salaryType:           s.salaryType||'FIXED',
       baseSalary:           s.baseSalary||0,
@@ -217,6 +522,9 @@ export default function Staff() {
         ifscCode:             form.ifscCode||null,
         bankName:             form.bankName||null,
         notes:                form.notes||null,
+        customRoleName:       form.customRoleName||null,
+        overtimeEnabled:      form.overtimeEnabled||false,
+        overtimeMultiplier:   Number(form.overtimeMultiplier)||1.5,
       }
 
       if (editId) {
@@ -238,6 +546,17 @@ export default function Staff() {
     catch(_) { toast.error('Failed') }
   }
 
+  async function toggleAttendancePerm(s) {
+    const newVal = !s.canEditAttendance
+    const label  = newVal ? 'Grant' : 'Revoke'
+    if (!confirm(`${s.name} ko attendance edit permission ${label.toLowerCase()} karna chahte hain?`)) return
+    try {
+      await staffApi.setAttendancePermission(s.id, newVal)
+      toast.success(`${label}ed attendance edit permission for ${s.name}`)
+      load()
+    } catch(_) { toast.error('Permission update failed') }
+  }
+
   const upd = f => e => setForm(p => ({ ...p, [f]: e.target.value }))
 
   // ── Stats ─────────────────────────────────────────────────────
@@ -254,10 +573,17 @@ export default function Staff() {
             Staff ke multiple roles assign karo — Cashier, Delivery, Kitchen etc.
           </p>
         </div>
-        <button onClick={openAdd} style={{ padding:'9px 18px', borderRadius:8, fontSize:13, fontWeight:600,
-          background:'var(--accent)', color:'#fff', border:'none', cursor:'pointer' }}>
-          + Add Staff
-        </button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => setShowRolesModal(true)}
+            style={{ padding:'9px 16px', borderRadius:8, fontSize:13, fontWeight:600,
+              background:'transparent', color:'var(--text)', border:'1px solid var(--border)', cursor:'pointer' }}>
+            🎭 Manage Roles
+          </button>
+          <button onClick={openAdd} style={{ padding:'9px 18px', borderRadius:8, fontSize:13, fontWeight:600,
+            background:'var(--accent)', color:'#fff', border:'none', cursor:'pointer' }}>
+            + Add Staff
+          </button>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -318,6 +644,20 @@ export default function Staff() {
                   {/* Staff */}
                   <td style={{ padding:'12px 16px' }}>
                     <div style={{ fontWeight:600, fontSize:13 }}>{s.name}</div>
+                    {s.customRoleName && (
+                      <div style={{ fontSize:11, marginTop:3 }}>
+                        {(() => {
+                          const cr = customRoles.find(r => r.name === s.customRoleName)
+                          const col = cr?.colorHex || '#6366f1'
+                          return (
+                            <span style={{ padding:'1px 7px', borderRadius:10, fontSize:10, fontWeight:600,
+                              background: col+'22', color: col }}>
+                              {s.customRoleName}
+                            </span>
+                          )
+                        })()}
+                      </div>
+                    )}
                     {s.joiningDate && (
                       <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
                         Joined: {s.joiningDate}
@@ -371,11 +711,29 @@ export default function Staff() {
 
                   {/* Actions */}
                   <td style={{ padding:'12px 16px' }}>
-                    <div style={{ display:'flex', gap:6 }}>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                       <button onClick={()=>openEdit(s)} style={{
                         fontSize:11, padding:'4px 10px', borderRadius:6,
                         border:'1px solid var(--border)', background:'transparent',
                         color:'var(--text-muted)', cursor:'pointer' }}>Edit</button>
+                      {isOwnerOrAdmin && (
+                        <button onClick={()=>toggleAttendancePerm(s)}
+                          title={s.canEditAttendance ? 'Revoke attendance edit permission' : 'Grant attendance edit permission'}
+                          style={{ fontSize:11, padding:'4px 10px', borderRadius:6,
+                            border: `1px solid ${s.canEditAttendance ? '#10b981' : '#6366f1'}`,
+                            background: s.canEditAttendance ? '#10b98118' : 'transparent',
+                            color: s.canEditAttendance ? '#10b981' : '#6366f1',
+                            cursor:'pointer', whiteSpace:'nowrap' }}>
+                          {s.canEditAttendance ? '✓ Att.Edit' : '+ Att.Edit'}
+                        </button>
+                      )}
+                      <button onClick={()=>setPasscodeTarget(s)}
+                        title="Set device login passcode"
+                        style={{ fontSize:11, padding:'4px 10px', borderRadius:6,
+                          border:'1px solid #f59e0b', background:'transparent',
+                          color:'#f59e0b', cursor:'pointer', whiteSpace:'nowrap' }}>
+                        🔑 Passcode
+                      </button>
                       <button onClick={()=>deactivate(s)} style={{
                         fontSize:11, padding:'4px 10px', borderRadius:6,
                         border:'1px solid #ef444440', background:'transparent',
@@ -450,6 +808,32 @@ export default function Staff() {
                     />
                   </div>
 
+                  {/* Custom Job Title */}
+                  <div style={{ marginBottom:14 }}>
+                    <label style={{ display:'block', fontSize:11, color:'var(--text-muted)', marginBottom:4, fontWeight:600 }}>
+                      Job Title (Custom Role) <span style={{ fontSize:10, fontWeight:400 }}>— optional</span>
+                    </label>
+                    <select value={form.customRoleName||''}
+                      onChange={e => setForm(f => ({ ...f, customRoleName: e.target.value }))}
+                      style={{ width:'100%', padding:'8px 10px', borderRadius:8, border:'1px solid var(--border)',
+                        background:'var(--bg-page)', color:'var(--text)', fontSize:13, boxSizing:'border-box' }}>
+                      <option value="">— None —</option>
+                      {customRoles.map(r => (
+                        <option key={r.id} value={r.name}>{r.name}</option>
+                      ))}
+                    </select>
+                    {customRoles.length === 0 && (
+                      <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:4 }}>
+                        Koi custom role nahi hai —{' '}
+                        <button type="button" onClick={() => setShowRolesModal(true)}
+                          style={{ background:'none', border:'none', color:'var(--accent)',
+                            cursor:'pointer', fontSize:11, padding:0, fontWeight:600 }}>
+                          Manage Roles
+                        </button>{' '}se add karo
+                      </div>
+                    )}
+                  </div>
+
                   <FSelect label="Employment Type" value={form.employmentType}
                     onChange={upd('employmentType')} options={EMP_TYPES}
                     labels={{ FULL_TIME:'Full Time', PART_TIME:'Part Time',
@@ -464,58 +848,149 @@ export default function Staff() {
               )}
 
               {/* ── SALARY TAB ── */}
-              {tab==='salary' && (
-                <>
-                  <FSelect label="Salary Type" value={form.salaryType}
-                    onChange={upd('salaryType')} options={SAL_TYPES}
-                    labels={{ FIXED:'Fixed Monthly', DAILY:'Daily Rate', HOURS:'Hourly Rate', COMMISSION:'Commission' }}/>
+              {tab==='salary' && (() => {
+                // Restaurant timing → daily working hours
+                function parseH(t, def) {
+                  if (!t) return def
+                  const [h, m] = t.split(':').map(Number)
+                  return h + (m || 0) / 60
+                }
+                const openH   = parseH(restOpenTime,  9)
+                const closeH  = parseH(restCloseTime, 21)
+                const dailyH  = closeH > openH ? Math.round((closeH - openH) * 10) / 10 : 8
+                const monthH  = Math.round(dailyH * 30 * 10) / 10  // 30 days
 
-                  {/* Salary input based on type */}
-                  {form.salaryType==='FIXED' && (
-                    <FInput label="Monthly Salary (₹)" value={form.baseSalary}
-                      onChange={upd('baseSalary')} type="number"
-                      hint="Example: 18000 = ₹18,000 per month"/>
-                  )}
-                  {form.salaryType==='DAILY' && (
-                    <FInput label="Daily Rate (₹/day)" value={form.baseSalary}
-                      onChange={upd('baseSalary')} type="number"
-                      hint="Example: 500 = ₹500 per day × attendance days"/>
-                  )}
-                  {form.salaryType==='HOURS' && (
-                    <FInput label="Hourly Rate (₹/hour)" value={form.hourlyRate}
-                      onChange={upd('hourlyRate')} type="number"
-                      hint="Example: 42 = ₹42 per hour × total hours worked"/>
-                  )}
-                  {form.salaryType==='COMMISSION' && (
-                    <>
-                      <FInput label="Base Salary (₹)" value={form.baseSalary}
-                        onChange={upd('baseSalary')} type="number"
-                        hint="Optional base salary"/>
-                      <FInput label="Commission %" value={form.commissionPercent}
-                        onChange={upd('commissionPercent')} type="number"
-                        hint="Example: 5 = 5% of total sales"/>
-                    </>
-                  )}
+                const hrRate    = Number(form.hourlyRate  || 0)
+                const dailyRate = Number(form.baseSalary  || 0)
+                const fixedSal  = Number(form.baseSalary  || 0)
+                const commPct   = Number(form.commissionPercent || 0)
+                const otMult    = Number(form.overtimeMultiplier || 1.5)
 
-                  {/* Salary preview */}
-                  <div style={{ padding:'12px 14px', borderRadius:10, background:'var(--bg-page)',
-                    border:'1px solid var(--border)', fontSize:12, color:'var(--text-muted)' }}>
-                    <div style={{ fontWeight:600, color:'var(--text)', marginBottom:6 }}>Preview:</div>
+                const regularPay = hrRate * monthH
+                const otPayEst   = form.overtimeEnabled ? hrRate * otMult * 30 : 0 // 1 OT hr/day estimate
+                const totalHours = form.overtimeEnabled ? monthH + 30 : monthH
+
+                return (
+                  <>
+                    <FSelect label="Salary Type" value={form.salaryType}
+                      onChange={upd('salaryType')} options={SAL_TYPES}
+                      labels={{ FIXED:'Fixed Monthly', DAILY:'Daily Rate', HOURS:'Hourly Rate', COMMISSION:'Commission' }}/>
+
                     {form.salaryType==='FIXED' && (
-                      <div>Monthly: <strong>₹{Number(form.baseSalary||0).toLocaleString('en-IN')}</strong></div>
+                      <FInput label="Monthly Salary (₹)" value={form.baseSalary}
+                        onChange={upd('baseSalary')} type="number"
+                        hint="Full month ka fixed salary"/>
                     )}
                     {form.salaryType==='DAILY' && (
-                      <div>26 days × ₹{form.baseSalary||0} = <strong>₹{(26*(Number(form.baseSalary)||0)).toLocaleString('en-IN')}</strong></div>
+                      <FInput label="Daily Rate (₹/day)" value={form.baseSalary}
+                        onChange={upd('baseSalary')} type="number"
+                        hint={`Example: 500 = ₹500/day × attendance days`}/>
                     )}
                     {form.salaryType==='HOURS' && (
-                      <div>192 hrs × ₹{form.hourlyRate||0} = <strong>₹{(192*(Number(form.hourlyRate)||0)).toLocaleString('en-IN')}</strong></div>
+                      <FInput label="Hourly Rate (₹/hour)" value={form.hourlyRate}
+                        onChange={upd('hourlyRate')} type="number"
+                        hint={`Example: 50 = ₹50/hr × hours worked`}/>
                     )}
                     {form.salaryType==='COMMISSION' && (
-                      <div>₹50,000 sales × {form.commissionPercent||0}% = <strong>₹{(50000*(Number(form.commissionPercent)||0)/100).toLocaleString('en-IN')}</strong></div>
+                      <>
+                        <FInput label="Base Salary (₹)" value={form.baseSalary}
+                          onChange={upd('baseSalary')} type="number" hint="Optional fixed base"/>
+                        <FInput label="Commission %" value={form.commissionPercent}
+                          onChange={upd('commissionPercent')} type="number"
+                          hint="Example: 5 = 5% of total sales"/>
+                      </>
                     )}
-                  </div>
-                </>
-              )}
+
+                    {/* Overtime toggle — only for HOURS type */}
+                    {form.salaryType==='HOURS' && (
+                      <div style={{ marginBottom:14, padding:'12px 14px', borderRadius:10,
+                        border:`1px solid ${form.overtimeEnabled?'#f59e0b':'var(--border)'}`,
+                        background: form.overtimeEnabled?'#f59e0b0a':'var(--bg-page)' }}>
+                        <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+                          <input type="checkbox" checked={!!form.overtimeEnabled}
+                            onChange={e => setForm(f => ({ ...f, overtimeEnabled: e.target.checked }))}
+                            style={{ width:16, height:16, cursor:'pointer' }} />
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:700, color: form.overtimeEnabled?'#f59e0b':'var(--text)' }}>
+                              ⏰ Overtime Pay
+                            </div>
+                            <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
+                              Restaurant hours ({restOpenTime}–{restCloseTime}) ke baad kaam karne par extra pay
+                            </div>
+                          </div>
+                        </label>
+                        {form.overtimeEnabled && (
+                          <div style={{ marginTop:10 }}>
+                            <label style={{ display:'block', fontSize:11, color:'var(--text-muted)', marginBottom:4, fontWeight:600 }}>
+                              OT Rate Multiplier
+                            </label>
+                            <div style={{ display:'flex', gap:6 }}>
+                              {[1.25, 1.5, 2.0, 2.5].map(m => (
+                                <button key={m} type="button"
+                                  onClick={() => setForm(f => ({ ...f, overtimeMultiplier: m }))}
+                                  style={{ padding:'5px 12px', borderRadius:6, fontSize:12, fontWeight:700,
+                                    cursor:'pointer', border:'1px solid',
+                                    borderColor: Number(form.overtimeMultiplier)===m ? '#f59e0b' : 'var(--border)',
+                                    background:  Number(form.overtimeMultiplier)===m ? '#f59e0b18' : 'transparent',
+                                    color:       Number(form.overtimeMultiplier)===m ? '#f59e0b' : 'var(--text-muted)' }}>
+                                  {m}×
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Salary preview — uses restaurant timing */}
+                    <div style={{ padding:'14px 16px', borderRadius:10, background:'var(--bg-page)',
+                      border:'1px solid var(--border)', fontSize:12, color:'var(--text-muted)' }}>
+                      <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:8, display:'flex', gap:6, alignItems:'center' }}>
+                        <span>🏪</span>
+                        <span>Restaurant hours: <strong style={{color:'var(--text)'}}>{restOpenTime} – {restCloseTime}</strong> ({dailyH}h/day)</span>
+                      </div>
+                      <div style={{ fontWeight:600, color:'var(--text)', marginBottom:8, fontSize:13 }}>Preview (30 days):</div>
+
+                      {form.salaryType==='FIXED' && (
+                        <div style={{ fontSize:13 }}>Monthly: <strong style={{color:'var(--accent)'}}>₹{fixedSal.toLocaleString('en-IN')}</strong></div>
+                      )}
+                      {form.salaryType==='DAILY' && (
+                        <div style={{ fontSize:13 }}>
+                          30 days × ₹{dailyRate.toLocaleString('en-IN')} = <strong style={{color:'var(--accent)'}}>₹{(30*dailyRate).toLocaleString('en-IN')}</strong>
+                        </div>
+                      )}
+                      {form.salaryType==='HOURS' && (
+                        <>
+                          <div style={{ fontSize:12, marginBottom:4 }}>
+                            Regular: 30 days × {dailyH}h × ₹{hrRate} =
+                            <strong style={{ color:'#10b981', marginLeft:4 }}>₹{regularPay.toLocaleString('en-IN', {maximumFractionDigits:2})}</strong>
+                          </div>
+                          {form.overtimeEnabled && (
+                            <div style={{ fontSize:12, color:'#f59e0b', marginBottom:4 }}>
+                              OT (est. 1h/day × 30 × {otMult}× × ₹{hrRate}) =
+                              <strong style={{ marginLeft:4 }}>+₹{otPayEst.toLocaleString('en-IN', {maximumFractionDigits:2})}</strong>
+                            </div>
+                          )}
+                          <div style={{ fontSize:13, borderTop:'1px solid var(--border)', paddingTop:6, marginTop:6 }}>
+                            Total est. ({form.overtimeEnabled ? `${monthH}h regular + 30h OT` : `${monthH}h`}):{' '}
+                            <strong style={{color:'var(--accent)', fontSize:15}}>
+                              ₹{(regularPay + otPayEst).toLocaleString('en-IN', {maximumFractionDigits:2})}
+                            </strong>
+                          </div>
+                        </>
+                      )}
+                      {form.salaryType==='COMMISSION' && (
+                        <div style={{ fontSize:13 }}>
+                          ₹50,000 sales × {commPct}% = <strong style={{color:'var(--accent)'}}>₹{(50000*commPct/100).toLocaleString('en-IN')}</strong>
+                          <div style={{ fontSize:11, marginTop:4 }}>
+                            {fixedSal > 0 && `+ Base ₹${fixedSal.toLocaleString('en-IN')} = ₹${(50000*commPct/100+fixedSal).toLocaleString('en-IN')}`}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )
+              })()}
 
               {/* ── DOCUMENTS TAB ── */}
               {tab==='docs' && (
@@ -551,6 +1026,25 @@ export default function Staff() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Passcode Modal */}
+      {passcodeTarget && (
+        <PasscodeModal
+          staff={passcodeTarget}
+          toast={toast}
+          onClose={() => setPasscodeTarget(null)}
+          onDone={() => setPasscodeTarget(null)}
+        />
+      )}
+
+      {/* Manage Roles Modal */}
+      {showRolesModal && (
+        <ManageRolesModal
+          rid={rid}
+          toast={toast}
+          onClose={() => { setShowRolesModal(false); loadCustomRoles() }}
+        />
       )}
     </div>
   )

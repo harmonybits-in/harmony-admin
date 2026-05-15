@@ -5,260 +5,272 @@ import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import { SkeletonTable } from '../components/Skeleton'
 
-const MOCK_STAFF = [
-  { id:1, name:'Ramesh Kumar', role:'Chef',    salaryType:'FIXED',  baseSalary:18000, attendanceDays:26, totalDays:30, totalWorkingHours:0,   advance:2000, loanBalance:5000, commissionPercent:0, totalSales:0 },
-  { id:2, name:'Sunita Devi',  role:'Waiter',  salaryType:'FIXED',  baseSalary:12000, attendanceDays:30, totalDays:30, totalWorkingHours:0,   advance:0,    loanBalance:0,    commissionPercent:0, totalSales:0 },
-  { id:3, name:'Mohan Lal',    role:'Cashier', salaryType:'DAILY',  baseSalary:500,   attendanceDays:28, totalDays:30, totalWorkingHours:0,   advance:1500, loanBalance:2000, commissionPercent:0, totalSales:0 },
-  { id:4, name:'Anita Singh',  role:'Helper',  salaryType:'HOURS',  baseSalary:42,    attendanceDays:26, totalDays:30, totalWorkingHours:192, advance:0,    loanBalance:0,    commissionPercent:0, totalSales:0 },
-  { id:5, name:'Vikram Yadav', role:'Delivery',salaryType:'COMMISSION', baseSalary:0, attendanceDays:26, totalDays:30, totalWorkingHours:0,  advance:0,    loanBalance:0,    commissionPercent:5, totalSales:45000 },
-]
-
-/**
- * Gross Salary Calculation:
- *
- * FIXED      → baseSalary × (attendanceDays / totalDays)
- * DAILY      → baseSalary(daily rate) × attendanceDays
- * HOURS      → baseSalary(hourly rate) × totalWorkingHours
- * COMMISSION → commissionPercent % of totalSales
- */
-function calcSalary(s) {
-  let gross = 0
-  const salaryType    = s.salaryType || 'FIXED'
-  const base          = Number(s.baseSalary)          || 0
-  const attendanceDays= Number(s.attendanceDays)      || 0
-  const totalDays     = Number(s.totalDays)           || 30
-  const workingHours  = Number(s.totalWorkingHours) || Number(s.monthlyHours) || 0
-  const totalSales    = Number(s.totalSales)          || 0
-  const commPct       = Number(s.commissionPercent)   || 0
-
-  if (salaryType === 'FIXED') {
-    // Pro-rata: monthly salary × (days present / total days)
-    gross = base * (attendanceDays / totalDays)
-  } else if (salaryType === 'DAILY') {
-    // Daily rate × days present
-    gross = base * attendanceDays
-  } else if (salaryType === 'HOURS') {
-    // Hourly rate × total working hours
-    gross = base * workingHours
-  } else if (salaryType === 'COMMISSION') {
-    // Commission % of total sales
-    gross = (totalSales * commPct) / 100
-  }
-
-  const deductions = (Number(s.advance) || 0) + (Number(s.loanBalance) || 0)
-  return {
-    gross:      Math.round(gross),
-    deductions,
-    net:        Math.round(gross) - deductions,
-  }
+function fmt(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) }
+function fmtH(h) {
+  if (!h) return '—'
+  const hrs  = Math.floor(h)
+  const mins = Math.round((h - hrs) * 60)
+  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`
 }
-
-function fmt(n) { return '₹'+(Number(n)||0).toLocaleString('en-IN') }
-
-function pct(v, total) { return total ? Math.round((v/total)*100) : 0 }
 
 export default function Payroll() {
   const rid   = useAuthStore(s => s.restaurantId)
   const toast = useToast()
-  const [staff, setStaff]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [month, setMonth]       = useState(new Date().toISOString().slice(0,7))
+  const [staff,    setStaff]    = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [month,    setMonth]    = useState(new Date().toISOString().slice(0, 7))
   const [selected, setSelected] = useState(null)
-  const [paying, setPaying]     = useState(null)
+  const [paying,   setPaying]   = useState(null)
 
+  // ── Load payroll summary from backend ────────────────────────────
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      // 1. Staff list fetch
-      const res = await api.get(`/staff?restaurantId=${rid}&size=50`)
-      const list = res?.content || (Array.isArray(res) ? res : [])
-      if (!list?.length) { setStaff(MOCK_STAFF); setLoading(false); return }
-
-      // 2. Monthly attendance fetch — year & month from selected month
-      const [yr, mo] = month.split('-').map(Number)
-      let attendanceList = []
-      try {
-        const att = await api.get(`/attendance?restaurantId=${rid}&year=${yr}&month=${mo}`)
-        attendanceList = Array.isArray(att) ? att : (att?.content || [])
-      } catch (_) {}
-
-      // 3. Per-staff hours sum from attendance
-      // attendance record has: staffId, hoursWorked
-      const hoursMap = {}
-      attendanceList.forEach(a => {
-        if (a.staffId && a.hoursWorked) {
-          hoursMap[a.staffId] = (hoursMap[a.staffId] || 0) + Number(a.hoursWorked)
-        }
-      })
-
-      // 4. Merge hours into staff list
-      const merged = list.map(s => ({
-        ...s,
-        // Map backend field names → component field names
-        baseSalary:       s.salaryType === 'HOURS' ? (s.hourlyRate || s.baseSalary || 0) : (s.baseSalary || 0),
-        totalWorkingHours: hoursMap[s.id] || s.totalWorkingHours || 0,
-        attendanceDays:   s.attendanceDays || 0,
-        totalDays:        s.totalDays || 30,
-        advance:          s.advance || s.advanceAmount || 0,
-        loanBalance:      s.loanBalance || s.loanAmount || 0,
-        commissionPercent:s.commissionPercent || 0,
-        totalSales:       s.totalSales || 0,
-      }))
-      setStaff(merged)
+      const res = await api.get(`/payroll/summary?restaurantId=${rid}&month=${month}`)
+      setStaff(res?.staffList || [])
     } catch (_) {
-      setStaff(MOCK_STAFF)
+      setStaff([])
     } finally { setLoading(false) }
   }, [rid, month])
 
   useEffect(() => { load() }, [month])
 
-  // Mark as paid
+  // ── Mark as paid ─────────────────────────────────────────────────
   async function markPaid(s) {
-    setPaying(s.id)
+    setPaying(s.staffId)
     try {
-      await api.post('/payroll/pay', { staffId: s.id, month, amount: calcSalary(s).net, restaurantId: rid })
-      toast.success(`✅ ${s.name} — ${fmt(calcSalary(s).net)} marked as paid!`)
+      await api.post('/payroll/pay', {
+        staffId: s.staffId, month, amount: s.netPayable, restaurantId: rid,
+      })
+      toast.success(`✅ ${s.staffName} — ${fmt(s.netPayable)} marked as paid!`)
+      load()
     } catch (_) {
-      toast.info(`${s.name} marked paid (offline mode)`)
+      toast.error('Mark paid failed')
     } finally { setPaying(null) }
   }
 
-  // Generate salary slip PDF
+  // ── Download salary slip ──────────────────────────────────────────
   function downloadSlip(s) {
-    const sal = calcSalary(s)
+    const regularPay = s.grossSalary - (s.overtimePay || 0)
     const html = `
       <html><head><style>
         body{font-family:Arial,sans-serif;padding:40px;max-width:600px;margin:auto}
-        h2{text-align:center;color:#333}
-        .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
-        .total{font-weight:bold;font-size:16px;color:#10b981}
         .header{background:#6366f1;color:white;padding:20px;border-radius:8px;margin-bottom:24px;text-align:center}
+        .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px}
+        .section{font-size:11px;color:#999;text-transform:uppercase;margin:16px 0 4px}
+        .total{font-weight:bold;font-size:16px;color:#10b981}
+        .ot{color:#f59e0b}
+        .deduct{color:#ef4444}
       </style></head><body>
         <div class="header">
-          <h2>💼 Salary Slip</h2>
-          <p>${month}</p>
+          <h2 style="margin:0 0 4px">💼 Salary Slip</h2>
+          <div>${month}</div>
         </div>
-        <div class="row"><span>Employee Name</span><strong>${s.name}</strong></div>
-        <div class="row"><span>Role</span><span>${s.role}</span></div>
+        <div class="row"><span>Employee</span><strong>${s.staffName}</strong></div>
+        <div class="row"><span>Role</span><span>${[...(s.roles || [])].join(', ')}</span></div>
         <div class="row"><span>Salary Type</span><span>${s.salaryType}</span></div>
-        <div class="row"><span>Attendance</span><span>${s.attendanceDays||30}/${s.totalDays||30} days</span></div>
-        <br/>
-        <div class="row"><span>Base Salary</span><span>${fmt(s.baseSalary)}</span></div>
-        <div class="row"><span>Gross Salary</span><span>${fmt(sal.gross)}</span></div>
-        <div class="row"><span>Advance Deduction</span><span style="color:#ef4444">- ${fmt(s.advance||0)}</span></div>
-        <div class="row"><span>Loan Deduction</span><span style="color:#ef4444">- ${fmt(s.loanBalance||0)}</span></div>
-        <br/>
-        <div class="row total"><span>Net Payable</span><span>${fmt(sal.net)}</span></div>
-        <br/><p style="text-align:center;color:#999;font-size:12px">Generated by HarmoneyEats • ${new Date().toLocaleDateString()}</p>
+        <div class="row"><span>Attendance</span><span>${s.attendanceDays}/${s.totalDays} days</span></div>
+        ${s.salaryType === 'HOURS' ? `
+        <div class="section">Hours Breakdown</div>
+        <div class="row"><span>Total Hours</span><span>${fmtH(s.monthlyHours)}</span></div>
+        ${s.overtimeEnabled && s.overtimeHours > 0 ? `
+        <div class="row"><span>Regular Hours</span><span>${fmtH(s.regularHours)}</span></div>
+        <div class="row ot"><span>Overtime Hours</span><span>${fmtH(s.overtimeHours)}</span></div>
+        ` : ''}
+        ` : ''}
+        <div class="section">Earnings</div>
+        <div class="row"><span>Regular Pay</span><span>${fmt(regularPay)}</span></div>
+        ${s.overtimePay > 0 ? `<div class="row ot"><span>Overtime Pay</span><span>+ ${fmt(s.overtimePay)}</span></div>` : ''}
+        <div class="row"><span>Gross Salary</span><strong>${fmt(s.grossSalary)}</strong></div>
+        <div class="section">Deductions</div>
+        <div class="row deduct"><span>Advance</span><span>- ${fmt(s.pendingAdvance || 0)}</span></div>
+        <div class="row deduct"><span>Loan</span><span>- ${fmt(s.loanBalance || 0)}</span></div>
+        <div class="row total" style="margin-top:12px;padding-top:12px;border-top:2px solid #333">
+          <span>Net Payable</span><span>${fmt(s.netPayable)}</span>
+        </div>
+        <p style="text-align:center;color:#999;font-size:12px;margin-top:32px">
+          Generated by HarmoneyEats • ${new Date().toLocaleDateString()}
+        </p>
       </body></html>`
     const blob = new Blob([html], { type: 'text/html' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
     a.href     = url
-    a.download = `salary-slip-${s.name.replace(' ','-')}-${month}.html`
+    a.download = `salary-slip-${s.staffName.replace(' ', '-')}-${month}.html`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success(`📄 Salary slip downloaded: ${s.name}`)
+    toast.success(`📄 Salary slip downloaded: ${s.staffName}`)
   }
 
-  // Summary
-  const totals = staff.reduce((acc, s) => {
-    const sal = calcSalary(s)
-    return { gross: acc.gross+sal.gross, net: acc.net+sal.net, advance: acc.advance+(s.advance||0), loan: acc.loan+(s.loanBalance||0) }
-  }, { gross:0, net:0, advance:0, loan:0 })
+  // ── Totals ────────────────────────────────────────────────────────
+  const totals = staff.reduce((acc, s) => ({
+    gross:   acc.gross   + (s.grossSalary    || 0),
+    net:     acc.net     + (s.netPayable     || 0),
+    advance: acc.advance + (s.pendingAdvance || 0),
+    loan:    acc.loan    + (s.loanBalance    || 0),
+    otPay:   acc.otPay   + (s.overtimePay   || 0),
+  }), { gross: 0, net: 0, advance: 0, loan: 0, otPay: 0 })
 
-  const StatCard = ({ label, value, color='var(--text)' }) => (
-    <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:'1.25rem' }}>
-      <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:8 }}>{label}</div>
-      <div style={{ fontSize:22, fontWeight:700, color }}>{value}</div>
+  const StatCard = ({ label, value, color = 'var(--text)' }) => (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.25rem' }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
     </div>
   )
 
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:700 }}>💼 Payroll</h1>
-          <p style={{ fontSize:13, color:'var(--text-muted)', marginTop:4 }}>Attendance-linked salary + salary slip PDF</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700 }}>💼 Payroll</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+            Attendance-linked salary with overtime breakdown
+          </p>
         </div>
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} style={{
-          padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)',
-          background:'var(--bg-page)', color:'var(--text)', fontSize:13,
+          padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+          background: 'var(--bg-page)', color: 'var(--text)', fontSize: 13,
         }} />
       </div>
 
-      {/* Summary */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12, marginBottom:'1.5rem' }}>
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: '1.5rem' }}>
         <StatCard label="💰 Total Gross"   value={fmt(totals.gross)}   color="#10b981" />
         <StatCard label="🏦 Net Payable"   value={fmt(totals.net)}     color="#6366f1" />
         <StatCard label="📤 Total Advance" value={fmt(totals.advance)} color="#f59e0b" />
         <StatCard label="🔄 Loan Balance"  value={fmt(totals.loan)}    color="#ef4444" />
+        {totals.otPay > 0 && (
+          <StatCard label="⏰ OT Pay"      value={fmt(totals.otPay)}   color="#f59e0b" />
+        )}
         <StatCard label="👥 Staff"         value={staff.length} />
       </div>
 
-      {/* Staff table */}
-      <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
-        {loading ? <SkeletonTable rows={4} cols={8} /> : (
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+      {/* Table */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        {loading ? <SkeletonTable rows={4} cols={8} /> : staff.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)', fontSize: 14 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>💼</div>
+            <div>Is month ke liye koi payroll data nahi hai</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>Staff attendance aur salary settings check karo</div>
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom:'1px solid var(--border)' }}>
-                {['Staff','Role','Attendance','Hours','Gross','Advance','Loan','Net','Actions'].map(h => (
-                  <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontSize:12, color:'var(--text-muted)', fontWeight:600 }}>{h}</th>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['Staff', 'Attendance', 'Hours / OT Breakdown', 'Regular Pay', 'OT Pay', 'Gross', 'Deductions', 'Net', 'Actions'].map(h => (
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {staff.map((s,i) => {
-                const sal = calcSalary(s)
-                const attPct = pct(s.attendanceDays||30, s.totalDays||30)
+              {staff.map((s, i) => {
+                const attPct      = s.totalDays > 0 ? Math.round((s.attendanceDays / s.totalDays) * 100) : 0
+                const regularPay  = s.grossSalary - (s.overtimePay || 0)
+                const hasOT       = s.overtimeEnabled && s.overtimeHours > 0
                 return (
-                  <tr key={s.id||i} style={{ borderBottom:'1px solid var(--border)' }}>
-                    <td style={{ padding:'12px 16px', fontSize:13, fontWeight:500 }}>{s.name}</td>
-                    <td style={{ padding:'12px 16px', fontSize:12, color:'var(--text-muted)' }}>{s.role}</td>
-                    <td style={{ padding:'12px 16px' }}>
-                      <div style={{ fontSize:12, marginBottom:4, color: attPct<80?'#ef4444':attPct<95?'#f59e0b':'#10b981' }}>
-                        {s.attendanceDays||30}/{s.totalDays||30} days ({attPct}%)
-                      </div>
-                      <div style={{ height:4, background:'var(--border)', borderRadius:2, overflow:'hidden' }}>
-                        <div style={{ height:'100%', width:`${attPct}%`, background: attPct<80?'#ef4444':attPct<95?'#f59e0b':'#10b981', borderRadius:2 }} />
+                  <tr key={s.staffId || i} style={{ borderBottom: '1px solid var(--border)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-page)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+
+                    {/* Staff */}
+                    <td style={{ padding: '12px 14px' }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{s.staffName}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {[...(s.roles || [])].join(', ')} · {s.salaryType}
                       </div>
                     </td>
-                    {/* Hours column — HOURS type staff ke liye working hours, baki ke liye — */}
-                    <td style={{ padding:'12px 16px', fontSize:13, color: s.salaryType==='HOURS'?'var(--text)':'var(--text-muted)' }}>
-                      {s.salaryType==='HOURS'
-                        ? <div>
-                            <span style={{ fontWeight:600 }}>
-                              {Number(s.totalWorkingHours)||Number(s.monthlyHours)||0} hrs
-                            </span>
-                            <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:2 }}>
-                              ₹{s.baseSalary}/hr
-                            </div>
+
+                    {/* Attendance */}
+                    <td style={{ padding: '12px 14px' }}>
+                      <div style={{ fontSize: 12, marginBottom: 4, color: attPct < 80 ? '#ef4444' : attPct < 95 ? '#f59e0b' : '#10b981' }}>
+                        {s.attendanceDays}/{s.totalDays} days ({attPct}%)
+                      </div>
+                      <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', width: 80 }}>
+                        <div style={{ height: '100%', width: `${attPct}%`, background: attPct < 80 ? '#ef4444' : attPct < 95 ? '#f59e0b' : '#10b981', borderRadius: 2 }} />
+                      </div>
+                    </td>
+
+                    {/* Hours / OT Breakdown */}
+                    <td style={{ padding: '12px 14px', minWidth: 160 }}>
+                      {s.salaryType === 'HOURS' ? (
+                        <div>
+                          <div style={{ fontSize: 12, marginBottom: hasOT ? 4 : 0 }}>
+                            Total: <strong>{fmtH(s.monthlyHours)}</strong>
                           </div>
-                        : <span style={{ color:'var(--text-muted)' }}>—</span>
-                      }
+                          {hasOT ? (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#10b981' }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                                Regular: {fmtH(s.regularHours)}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#f59e0b', marginTop: 2 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                                OT: {fmtH(s.overtimeHours)}
+                              </div>
+                            </>
+                          ) : s.overtimeEnabled ? (
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>No overtime this month</div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                      )}
                     </td>
-                    <td style={{ padding:'12px 16px', fontSize:13 }}>{fmt(sal.gross)}</td>
-                    <td style={{ padding:'12px 16px', fontSize:13, color: s.advance?'#f59e0b':'var(--text-muted)' }}>{s.advance?fmt(s.advance):'—'}</td>
-                    <td style={{ padding:'12px 16px', fontSize:13, color: s.loanBalance?'#ef4444':'var(--text-muted)' }}>{s.loanBalance?fmt(s.loanBalance):'—'}</td>
-                    <td style={{ padding:'12px 16px', fontSize:13, fontWeight:700, color:'#10b981' }}>{fmt(sal.net)}</td>
-                    <td style={{ padding:'12px 16px' }}>
-                      <div style={{ display:'flex', gap:4 }}>
+
+                    {/* Regular Pay */}
+                    <td style={{ padding: '12px 14px', fontSize: 13 }}>
+                      {fmt(regularPay)}
+                    </td>
+
+                    {/* OT Pay */}
+                    <td style={{ padding: '12px 14px', fontSize: 13 }}>
+                      {s.overtimePay > 0 ? (
+                        <span style={{ color: '#f59e0b', fontWeight: 600 }}>+{fmt(s.overtimePay)}</span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      )}
+                    </td>
+
+                    {/* Gross */}
+                    <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600 }}>
+                      {fmt(s.grossSalary)}
+                    </td>
+
+                    {/* Deductions */}
+                    <td style={{ padding: '12px 14px', fontSize: 12 }}>
+                      {(s.pendingAdvance || s.loanBalance) ? (
+                        <div>
+                          {s.pendingAdvance > 0 && <div style={{ color: '#f59e0b' }}>Adv: {fmt(s.pendingAdvance)}</div>}
+                          {s.loanBalance   > 0 && <div style={{ color: '#ef4444' }}>Loan: {fmt(s.loanBalance)}</div>}
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+
+                    {/* Net */}
+                    <td style={{ padding: '12px 14px', fontSize: 14, fontWeight: 700, color: '#10b981' }}>
+                      {fmt(s.netPayable)}
+                    </td>
+
+                    {/* Actions */}
+                    <td style={{ padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         <button onClick={() => setSelected(s)} style={{
-                          fontSize:11, padding:'4px 8px', borderRadius:6,
-                          border:'1px solid var(--border)', background:'transparent',
-                          color:'var(--text-muted)', cursor:'pointer',
+                          fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                          border: '1px solid var(--border)', background: 'transparent',
+                          color: 'var(--text-muted)', cursor: 'pointer',
                         }}>Details</button>
                         <button onClick={() => downloadSlip(s)} style={{
-                          fontSize:11, padding:'4px 8px', borderRadius:6,
-                          border:'1px solid #6366f1', background:'transparent',
-                          color:'#6366f1', cursor:'pointer',
+                          fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                          border: '1px solid #6366f1', background: 'transparent',
+                          color: '#6366f1', cursor: 'pointer',
                         }}>📄 Slip</button>
-                        <button onClick={() => markPaid(s)} disabled={paying===s.id} style={{
-                          fontSize:11, padding:'4px 8px', borderRadius:6,
-                          border:'none', background:'#10b981',
-                          color:'#fff', cursor:paying===s.id?'not-allowed':'pointer',
-                          opacity: paying===s.id?0.6:1,
-                        }}>{paying===s.id?'...':'Pay'}</button>
+                        <button onClick={() => markPaid(s)} disabled={paying === s.staffId} style={{
+                          fontSize: 11, padding: '4px 8px', borderRadius: 6,
+                          border: 'none', background: '#10b981', color: '#fff',
+                          cursor: paying === s.staffId ? 'not-allowed' : 'pointer',
+                          opacity: paying === s.staffId ? 0.6 : 1,
+                        }}>{paying === s.staffId ? '…' : 'Pay'}</button>
                       </div>
                     </td>
                   </tr>
@@ -266,15 +278,25 @@ export default function Payroll() {
               })}
             </tbody>
             <tfoot>
-              <tr style={{ background:'var(--bg-page)', borderTop:'2px solid var(--border)' }}>
-                <td colSpan={3} style={{ padding:'12px 16px', fontSize:13, fontWeight:700 }}>Total ({staff.length})</td>
-                <td style={{ padding:'12px 16px', fontSize:12, color:'var(--text-muted)' }}>
-                  {staff.filter(s=>s.salaryType==='HOURS').reduce((a,s)=>a+(Number(s.totalWorkingHours)||Number(s.monthlyHours)||0),0)||'—'}
+              <tr style={{ background: 'var(--bg-page)', borderTop: '2px solid var(--border)' }}>
+                <td colSpan={2} style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700 }}>
+                  Total ({staff.length} staff)
                 </td>
-                <td style={{ padding:'12px 16px', fontSize:13, fontWeight:700 }}>{fmt(totals.gross)}</td>
-                <td style={{ padding:'12px 16px', fontSize:13, fontWeight:700, color:'#f59e0b' }}>{fmt(totals.advance)}</td>
-                <td style={{ padding:'12px 16px', fontSize:13, fontWeight:700, color:'#ef4444' }}>{fmt(totals.loan)}</td>
-                <td style={{ padding:'12px 16px', fontSize:13, fontWeight:700, color:'#10b981' }}>{fmt(totals.net)}</td>
+                <td style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                  {fmtH(staff.filter(s => s.salaryType === 'HOURS').reduce((a, s) => a + (s.monthlyHours || 0), 0))}
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700 }}>
+                  {fmt(totals.gross - totals.otPay)}
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>
+                  {totals.otPay > 0 ? fmt(totals.otPay) : '—'}
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700 }}>{fmt(totals.gross)}</td>
+                <td style={{ padding: '12px 14px', fontSize: 12 }}>
+                  <div style={{ color: '#f59e0b' }}>Adv: {fmt(totals.advance)}</div>
+                  <div style={{ color: '#ef4444' }}>Loan: {fmt(totals.loan)}</div>
+                </td>
+                <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#10b981' }}>{fmt(totals.net)}</td>
                 <td />
               </tr>
             </tfoot>
@@ -282,40 +304,109 @@ export default function Payroll() {
         )}
       </div>
 
-      {/* Detail panel */}
-      {selected && (() => {
-        const sal = calcSalary(selected)
-        return (
-          <div style={{ position:'fixed', right:0, top:0, bottom:0, width:320, background:'var(--bg-card)', borderLeft:'1px solid var(--border)', padding:'1.5rem', overflowY:'auto', zIndex:100, boxShadow:'-4px 0 24px rgba(0,0,0,0.15)' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'1.5rem' }}>
-              <h2 style={{ fontSize:16, fontWeight:700 }}>Payroll Detail</h2>
-              <button onClick={() => setSelected(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'var(--text-muted)' }}>✕</button>
+      {/* Detail side panel */}
+      {selected && (
+        <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 340,
+          background: 'var(--bg-card)', borderLeft: '1px solid var(--border)',
+          padding: '1.5rem', overflowY: 'auto', zIndex: 100, boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }}>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700 }}>Payroll Detail</h2>
+            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+          </div>
+
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: '1rem' }}>👤 {selected.staffName}</div>
+
+          {/* Info rows */}
+          {[
+            ['Role',       [...(selected.roles || [])].join(', ')],
+            ['Salary Type', selected.salaryType],
+            ['Attendance', `${selected.attendanceDays}/${selected.totalDays} days`],
+          ].map(([l, v]) => (
+            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l}</span>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{v}</span>
             </div>
-            <div style={{ fontWeight:600, fontSize:15, marginBottom:'1rem' }}>👤 {selected.name}</div>
+          ))}
+
+          {/* Hours breakdown — HOURS type only */}
+          {selected.salaryType === 'HOURS' && (
+            <div style={{ margin: '12px 0 4px', padding: '12px', borderRadius: 8, background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase' }}>
+                Hours Breakdown
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                <span>Total Hours</span>
+                <strong>{fmtH(selected.monthlyHours)}</strong>
+              </div>
+              {selected.overtimeEnabled ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                    <span style={{ color: '#10b981' }}>● Regular Hours</span>
+                    <span style={{ color: '#10b981', fontWeight: 600 }}>{fmtH(selected.regularHours)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span style={{ color: '#f59e0b' }}>● Overtime Hours</span>
+                    <span style={{ color: '#f59e0b', fontWeight: 600 }}>{fmtH(selected.overtimeHours)}</span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Overtime disabled for this staff</div>
+              )}
+            </div>
+          )}
+
+          {/* Earnings breakdown */}
+          <div style={{ margin: '12px 0 4px', padding: '12px', borderRadius: 8, background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase' }}>
+              Earnings
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+              <span>Regular Pay</span>
+              <span>{fmt(selected.grossSalary - (selected.overtimePay || 0))}</span>
+            </div>
+            {selected.overtimePay > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4, color: '#f59e0b' }}>
+                <span>⏰ Overtime Pay</span>
+                <span style={{ fontWeight: 600 }}>+{fmt(selected.overtimePay)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 4 }}>
+              <span>Gross Salary</span>
+              <span>{fmt(selected.grossSalary)}</span>
+            </div>
+          </div>
+
+          {/* Deductions */}
+          <div style={{ margin: '12px 0 4px', padding: '12px', borderRadius: 8, background: 'var(--bg-page)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase' }}>
+              Deductions
+            </div>
             {[
-              ['Role',       selected.role],
-              ['Type',       selected.salaryType],
-              ['Base',       fmt(selected.baseSalary)],
-              ['Attendance', `${selected.attendanceDays||30}/${selected.totalDays||30} days`],
-              ['Gross',      fmt(sal.gross)],
-              ['Advance',    fmt(selected.advance||0)],
-              ['Loan',       fmt(selected.loanBalance||0)],
-              ['Net',        fmt(sal.net)],
-            ].map(([l,v]) => (
-              <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
-                <span style={{ fontSize:12, color:'var(--text-muted)' }}>{l}</span>
-                <span style={{ fontSize:13, fontWeight:500 }}>{v}</span>
+              ['Advance', selected.pendingAdvance || 0, '#f59e0b'],
+              ['Loan',    selected.loanBalance    || 0, '#ef4444'],
+            ].map(([l, v, c]) => (
+              <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: c }}>- {l}</span>
+                <span style={{ color: c, fontWeight: 600 }}>{fmt(v)}</span>
               </div>
             ))}
-            <button onClick={() => downloadSlip(selected)} style={{ width:'100%', marginTop:'1rem', padding:'10px', background:'#6366f1', color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
-              📄 Download Salary Slip
-            </button>
-            <button onClick={() => { markPaid(selected); setSelected(null) }} style={{ width:'100%', marginTop:8, padding:'10px', background:'#10b981', color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
-              💳 Mark as Paid
-            </button>
           </div>
-        )
-      })()}
+
+          {/* Net */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', fontSize: 16, fontWeight: 700, color: '#10b981', borderTop: '2px solid var(--border)', marginTop: 8 }}>
+            <span>Net Payable</span>
+            <span>{fmt(selected.netPayable)}</span>
+          </div>
+
+          <button onClick={() => downloadSlip(selected)} style={{ width: '100%', marginTop: '1rem', padding: '10px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            📄 Download Salary Slip
+          </button>
+          <button onClick={() => { markPaid(selected); setSelected(null) }} style={{ width: '100%', marginTop: 8, padding: '10px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            💳 Mark as Paid
+          </button>
+        </div>
+      )}
     </div>
   )
 }
