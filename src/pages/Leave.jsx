@@ -163,7 +163,7 @@ function ApplyLeaveModal({ rid, staff, policy, onClose, onDone, toast }) {
       await leaveApi.applyLeave({
         restaurantId: rid,
         staffId: Number(form.staffId),
-        leaveType: form.leaveType,
+        type: form.leaveType,
         startDate: form.startDate,
         endDate: form.endDate,
         reason: form.reason.trim(),
