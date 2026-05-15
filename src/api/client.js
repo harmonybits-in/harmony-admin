@@ -19,7 +19,15 @@ async function request(path, opts = {}) {
     window.location.href = '/login'
     return null
   }
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) {
+    let msg = `${res.status}`
+    try {
+      const ct = res.headers.get('content-type') || ''
+      const body = ct.includes('application/json') ? await res.json() : await res.text()
+      msg = body?.message || body?.error || (typeof body === 'string' && body) || msg
+    } catch {}
+    throw new Error(msg)
+  }
   const ct = res.headers.get('content-type') || ''
   return ct.includes('application/json') ? res.json() : res.text()
 }
