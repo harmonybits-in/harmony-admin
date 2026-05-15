@@ -125,7 +125,7 @@ function PrinterSettingsPanel({ onClose, onSave }) {
         <div style={{background:'#f8f9fb',borderRadius:10,padding:'20px',
           border:'1px solid #e8eaed',marginTop:8}}>
           <div style={{fontSize:13,fontWeight:600,color:'#333',marginBottom:14}}>Barcode Preview</div>
-          <div style={{position:'relative',display:'inline-block',margin:'0 auto',display:'flex',
+          <div style={{position:'relative',display:'flex',margin:'0 auto',
             justifyContent:'center'}}>
             {/* Dimension labels */}
             <div style={{position:'relative'}}>

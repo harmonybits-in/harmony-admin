@@ -156,6 +156,7 @@ function ProductsTab({ rid, categories }) {
   const [view,        setView]        = useState('list')  // 'list' | 'addItems'
   const [editItem,    setEditItem]    = useState(null)
   const [rows,        setRows]        = useState([])
+  const [viewItem,    setViewItem]    = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -190,15 +191,13 @@ function ProductsTab({ rid, categories }) {
       const vid=Number(r._variantId)
       if(!vid) return r
       if((r.productVariants||[]).some(pv=>pv.variantId===vid)) return r
-      // Use entered price, or fallback to variant's default price
       const variantDefault = variantsList.find(v=>v.id===vid)?.price || 0
       const vp = r._variantPrice!==''&&r._variantPrice!=null
         ? Number(r._variantPrice)
         : variantDefault
       const pvs=[...(r.productVariants||[]),{variantId:vid,price:vp}]
-      // First variant price becomes the product price
-      const newPrice = pvs.length===1 ? String(vp) : r.price
-      return{...r,productVariants:pvs,price:newPrice,_variantId:'',_variantPrice:''}
+      // Price blank when variants present — item price depends on variant
+      return{...r,productVariants:pvs,price:'',_variantId:'',_variantPrice:''}
     }))
   }
   function removeVariantFromRow(i,vid){
@@ -219,13 +218,19 @@ function ProductsTab({ rid, categories }) {
   async function handleSave(exitAfter) {
     const invalid=rows.find(r=>!r.name?.trim())
     if(invalid){toast.error('Item naam required hai');return}
+    const pendingVariant=rows.find(r=>r._variantId)
+    if(pendingVariant){
+      toast.error(`"${pendingVariant.name||'Item'}" mein variant select hua hai but Add nahi kiya — "+ Add Variation" click karo ya × se clear karo`)
+      return
+    }
     setSaving(true)
     try {
       if(editItem) {
         const r=rows[0]
         await api.put(`/products/${editItem.id}`,{
-          name:r.name.trim(),description:r.description,price:Number(r.price)||0,
-          categoryId:Number(r.categoryId),available:r.available,restaurantId:rid,
+          name:r.name.trim(), description:r.description, price:Number(r.price)||0,
+          shortCode:r.shortCode||'', displayName:r.displayName||'', gstType:r.gstType||'SERVICES',
+          categoryId:Number(r.categoryId), available:r.available, restaurantId:rid,
           productVariants:(r.productVariants||[]).map(pv=>({variantId:Number(pv.variantId),price:Number(pv.price)||0})),
           addonGroupIds:(r.addonGroupIds||[]).map(Number),
         })
@@ -235,11 +240,11 @@ function ProductsTab({ rid, categories }) {
         await Promise.all(valid.map(r=>{
           const payload = {
             name:r.name.trim(), description:r.description, price:Number(r.price)||0,
+            shortCode:r.shortCode||'', displayName:r.displayName||'', gstType:r.gstType||'SERVICES',
             categoryId:Number(r.categoryId), available:r.available, active:true, restaurantId:rid,
             productVariants:(r.productVariants||[]).map(pv=>({variantId:Number(pv.variantId),price:Number(pv.price)||0})),
             addonGroupIds:(r.addonGroupIds||[]).map(Number),
           }
-          console.log('📦 Sending product:', JSON.stringify(payload, null, 2))
           return api.post('/products', payload)
         }))
         toast.success(`${valid.length} items saved!`)
@@ -353,7 +358,7 @@ function ProductsTab({ rid, categories }) {
                     cursor:(row.productVariants||[]).length>0?'not-allowed':'text',
                   }}/>
                 {(row.productVariants||[]).length>0&&(
-                  <div style={{fontSize:10,color:'#64748b',marginTop:2}}>★ 1st variant price se set</div>
+                  <div style={{fontSize:10,color:'#64748b',marginTop:2}}>★ Variant se set hoga</div>
                 )}
 
                 <input value={row.description||''} onChange={e=>upd(i,'description',e.target.value)}
@@ -523,6 +528,7 @@ function ProductsTab({ rid, categories }) {
 
   // ══════ LIST PAGE ══════
   return (
+    <>
     <div style={{display:'flex',gap:0,height:'calc(100vh - 180px)',overflow:'hidden',
       border:'1px solid #e5e7eb',borderRadius:8,background:'#fff'}}>
 
@@ -632,7 +638,7 @@ function ProductsTab({ rid, categories }) {
                         <td style={TD}>
                           <div style={{display:'flex',gap:5}}>
                             <button onClick={()=>goEdit(p)} style={AB} title="Edit">✏️</button>
-                            <button style={AB} title="View">📋</button>
+                            <button onClick={()=>setViewItem(p)} style={AB} title="View Details">📋</button>
                             <button onClick={()=>toggle(p)} style={AB} title="Toggle">{p.available?'👁':'🚫'}</button>
                             <button style={AB} title="Copy">⧉</button>
                             <button onClick={()=>del(p)} style={{...AB,color:'#ef4444'}} title="Delete">🗑</button>
@@ -722,6 +728,120 @@ function ProductsTab({ rid, categories }) {
         </div>
       </div>
     </div>
+
+    {/* ── Product Detail Modal ── */}
+    {viewItem && (
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:400,
+        display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
+        onClick={e=>e.target===e.currentTarget&&setViewItem(null)}>
+        <div style={{background:'#fff',borderRadius:14,width:'100%',maxWidth:500,
+          maxHeight:'88vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+
+          {/* Header */}
+          <div style={{padding:'16px 20px',borderBottom:'1px solid #e5e7eb',
+            display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+            <div>
+              <div style={{fontSize:17,fontWeight:800,color:'#111'}}>{viewItem.name}</div>
+              <div style={{fontSize:11,color:'#888',marginTop:2}}>
+                ID #{viewItem.id} · {catMap[viewItem.categoryId]||'—'}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,fontWeight:700,
+                background:viewItem.available?'#d1fae5':'#fee2e2',
+                color:viewItem.available?'#059669':'#dc2626'}}>
+                {viewItem.available?'Available':'Unavailable'}
+              </span>
+              <button onClick={()=>setViewItem(null)}
+                style={{background:'none',border:'none',fontSize:20,cursor:'pointer',color:'#aaa',lineHeight:1}}>✕</button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{padding:'16px 20px'}}>
+
+            {/* Price / Variants */}
+            {(viewItem.productVariants||[]).length>0 ? (
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',marginBottom:8}}>Variants & Prices</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                  {viewItem.productVariants.map((pv,pi)=>{
+                    const vName = pv.variant?.name || variants.find(v=>v.id===pv.variantId)?.name || `Variant ${pv.variantId}`
+                    return (
+                      <div key={pv.variantId??pi} style={{display:'flex',alignItems:'center',gap:8,
+                        padding:'8px 14px',borderRadius:8,border:'1px solid #fca5a5',background:'#fff5f5'}}>
+                        <span style={{fontSize:13,fontWeight:600,color:'#111'}}>{vName}</span>
+                        <span style={{fontSize:14,fontWeight:800,color:'#e53e3e'}}>₹{pv.price}</span>
+                        {pi===0&&<span style={{fontSize:10,color:'#e53e3e',fontWeight:700}}>★ Base</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{marginBottom:16,display:'flex',alignItems:'center',gap:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase'}}>Price</div>
+                <div style={{fontSize:22,fontWeight:800,color:'#16a34a'}}>₹{viewItem.price||0}</div>
+              </div>
+            )}
+
+            {/* Info Grid */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px 20px',marginBottom:16}}>
+              {[
+                ['Category',  catMap[viewItem.categoryId]||'—'],
+                ['Dietary',   viewItem.dietary||'VEG'],
+                ['GST Type',  viewItem.gstType||'—'],
+                ['Short Code',viewItem.shortCode||'—'],
+              ].map(([k,v])=>(
+                <div key={k}>
+                  <div style={{fontSize:10,color:'#888',fontWeight:600,textTransform:'uppercase'}}>{k}</div>
+                  <div style={{fontSize:13,fontWeight:600,marginTop:2}}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Description */}
+            {viewItem.description&&(
+              <div style={{marginBottom:16,padding:'10px 12px',background:'#f9fafb',
+                borderRadius:8,border:'1px solid #e5e7eb'}}>
+                <div style={{fontSize:10,color:'#888',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>Description</div>
+                <div style={{fontSize:13,color:'#333'}}>{viewItem.description}</div>
+              </div>
+            )}
+
+            {/* Addon Groups */}
+            {(viewItem.addonGroups||[]).length>0&&(
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#888',textTransform:'uppercase',marginBottom:8}}>Addon Groups</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                  {viewItem.addonGroups.map(ag=>(
+                    <span key={ag.id} style={{fontSize:12,padding:'4px 12px',borderRadius:20,
+                      background:'#eff6ff',border:'1px solid #bfdbfe',color:'#2563eb',fontWeight:600}}>
+                      {ag.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{display:'flex',gap:8,paddingTop:12,borderTop:'1px solid #e5e7eb'}}>
+              <button onClick={()=>{setViewItem(null);goEdit(viewItem)}}
+                style={{flex:1,padding:'9px',borderRadius:8,border:'none',
+                  background:'#e53e3e',color:'#fff',fontWeight:600,cursor:'pointer',fontSize:13}}>
+                ✏️ Edit
+              </button>
+              <button onClick={()=>{toggle(viewItem);setViewItem(v=>({...v,available:!v.available}))}}
+                style={{flex:1,padding:'9px',borderRadius:8,border:'1px solid #e5e7eb',
+                  background:'transparent',color:'#555',cursor:'pointer',fontSize:13}}>
+                {viewItem.available?'🚫 Mark Unavailable':'👁 Mark Available'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

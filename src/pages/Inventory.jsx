@@ -759,10 +759,16 @@ export default function Inventory() {
         <Route path="masters/recipes"        element={<ItemRecipes/>}/>
         <Route path="masters/suppliers"      element={<SuppliersPage rid={rid}/>}/>
         <Route path="masters/units"          element={<UnitManagement/>}/>
+        <Route path="stock/opening"          element={<PlaceholderPage title="Opening Stock" icon="📋"/>}/>
         <Route path="consumption/sales"      element={<PlaceholderPage title="Sales Consumption" icon="📉"/>}/>
         <Route path="consumption/transfer"   element={<PlaceholderPage title="Transfer" icon="🔄"/>}/>
         <Route path="consumption/wastage"    element={<PlaceholderPage title="Wastage" icon="🗑️"/>}/>
+        <Route path="consumption/return"     element={<PlaceholderPage title="Sales Return" icon="↩️"/>}/>
         <Route path="production"             element={<PlaceholderPage title="Production" icon="🏭"/>}/>
+        <Route path="reports/stock"          element={<PlaceholderPage title="Current Stock Report" icon="☑️"/>}/>
+        <Route path="reports/summary"        element={<PlaceholderPage title="Stock Summary" icon="📦"/>}/>
+        <Route path="reports/consumption"    element={<PlaceholderPage title="Orderwise Consumption" icon="📋"/>}/>
+        <Route path="reports/other"          element={<PlaceholderPage title="Other Reports" icon="🕐"/>}/>
         <Route path="reports"                element={<PlaceholderPage title="Inventory Reports" icon="📊"/>}/>
       </Routes>
     </div>

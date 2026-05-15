@@ -442,9 +442,8 @@ export default function Coupons() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {ORDER_TYPES.map(t => {
                 const active = form.orderTypes.includes(t)
-                const disabled = t !== 'ALL' && form.orderTypes.includes('ALL')
                 return (
-                  <button key={t} type="button" disabled={disabled} onClick={() => {
+                  <button key={t} type="button" onClick={() => {
                     setForm(f => {
                       if (t === 'ALL') return { ...f, orderTypes: ['ALL'] }
                       const cur = f.orderTypes.filter(x => x !== 'ALL')
@@ -455,8 +454,8 @@ export default function Coupons() {
                     padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                     border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
                     background: active ? 'var(--accent)' : 'transparent',
-                    color: active ? '#fff' : disabled ? 'var(--text-muted)' : 'var(--text)',
-                    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1,
+                    color: active ? '#fff' : 'var(--text)',
+                    cursor: 'pointer',
                   }}>{t}</button>
                 )
               })}

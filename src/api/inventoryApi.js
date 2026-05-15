@@ -5,7 +5,7 @@
 
 import { useAuthStore } from '../store/authStore'
 
-const BASE = '/api/v1/inv'
+const BASE = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1/inv'
 
 function token() {
   return useAuthStore.getState().token
@@ -166,14 +166,20 @@ export const categoryApi = {
 }
 
 // ── Existing Inventory (stock) ────────────────────────────────────
-// Reusing existing /api/v1/inventory endpoints
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+async function stockReq(method, path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (res.status === 204) return null
+  return res.json()
+}
 export const stockApi = {
-  getAll:      (rid) => fetch(`/api/v1/inventory?restaurantId=${rid}`,
-    { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
-
-  getLowStock: (rid) => fetch(`/api/v1/inventory/low-stock?restaurantId=${rid}`,
-    { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
-
-  addStock:    (data) => req('POST', '/api/v1/inventory/add'.replace('/api/v1/inv',''), data),
-  deductStock: (data) => req('POST', '/api/v1/inventory/deduct'.replace('/api/v1/inv',''), data),
+  getAll:      (rid) => stockReq('GET',  `/inventory?restaurantId=${rid}`),
+  getLowStock: (rid) => stockReq('GET',  `/inventory/low-stock?restaurantId=${rid}`),
+  addStock:    (data) => stockReq('POST', '/inventory/add', data),
+  deductStock: (data) => stockReq('POST', '/inventory/deduct', data),
 }

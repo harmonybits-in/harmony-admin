@@ -1,38 +1,337 @@
 // src/pages/Bills.jsx
-import { useState, useEffect } from 'react'
-import { billApi } from '../api/client'
+import { useState, useEffect, useCallback } from 'react'
+import { billApi, api } from '../api/client'
 import { useAuthStore } from '../store/authStore'
+import { useToast } from '../hooks/useToast'
 
+// ── Helpers ───────────────────────────────────────────────────────────────
 function fmt(n) {
   return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })
 }
+function fmtDate(d) {
+  if (!d) return '—'
+  return new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+}
 
-const MODES = ['ALL', 'CASH', 'UPI', 'CARD']
+const MODES = ['ALL', 'CASH', 'UPI', 'CARD', 'ONLINE']
 
-export default function Bills() {
-  const rid = useAuthStore(s => s.restaurantId)
-  const [bills, setBills]     = useState([])
-  const [page, setPage]       = useState(0)
-  const [total, setTotal]     = useState(0)
-  const [totalPg, setTotalPg] = useState(1)
+const ORDER_LABELS = { DINE_IN: 'Dine In', PICKUP: 'Pickup', DELIVERY: 'Delivery', ONLINE: 'Online' }
+const ORDER_COLORS = { DINE_IN: '#6366f1', PICKUP: '#f59e0b', DELIVERY: '#10b981', ONLINE: '#ec4899' }
+const PAY_COLORS   = { CASH: '#10b981', UPI: '#6366f1', CARD: '#f59e0b', ONLINE: '#ec4899', CREDIT: '#ef4444' }
+
+// ── Small UI Helpers ──────────────────────────────────────────────────────
+function Badge({ color, children }) {
+  return (
+    <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600,
+      background: (color || '#888') + '22', color: color || '#888' }}>
+      {children}
+    </span>
+  )
+}
+
+function SumRow({ label, value, bold, color }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between',
+      fontWeight: bold ? 700 : 400, fontSize: bold ? 15 : 13 }}>
+      <span style={{ color: bold ? 'var(--text)' : 'var(--text-muted)' }}>{label}</span>
+      <span style={{ color: color || (bold ? 'var(--text)' : 'var(--text-muted)') }}>{value}</span>
+    </div>
+  )
+}
+
+// ── Print Receipt ─────────────────────────────────────────────────────────
+function printReceipt(bill, restaurant) {
+  const items    = bill.items || []
+  const rName    = restaurant?.name    || 'Restaurant'
+  const rPhone   = restaurant?.phone   || ''
+  const rAddress = restaurant?.address || ''
+  const rGst     = restaurant?.gstNumber   || ''
+  const rFssai   = restaurant?.fssaiLicNo  || ''
+
+  const itemRows = items.map(it => {
+    const name  = it.product?.name || '—'
+    const qty   = it.quantity || 1
+    const price = it.price    || 0
+    const total = it.total    || (qty * price)
+    return `<tr>
+      <td style="padding:3px 0;vertical-align:top">${name}</td>
+      <td style="text-align:center;padding:3px 4px;white-space:nowrap">${qty} × ${fmt(price)}</td>
+      <td style="text-align:right;padding:3px 0;white-space:nowrap;font-weight:600">${fmt(total)}</td>
+    </tr>`
+  }).join('')
+
+  const discRow = (bill.discount  || 0) > 0
+    ? `<tr><td colspan="2" style="padding:2px 0">Discount</td><td style="text-align:right;color:#10b981;padding:2px 0">- ${fmt(bill.discount)}</td></tr>` : ''
+  const taxRow  = (bill.taxAmount || 0) > 0
+    ? `<tr><td colspan="2" style="padding:2px 0">Tax / GST</td><td style="text-align:right;padding:2px 0">${fmt(bill.taxAmount)}</td></tr>` : ''
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Bill #${bill.billNumber || bill.id}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',Courier,monospace;font-size:12px;color:#000;width:302px;margin:0 auto;padding:8px}
+  .c{text-align:center} .b{font-weight:700} .lg{font-size:16px}
+  .div{border-top:1px dashed #000;margin:6px 0}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  .foot{text-align:center;font-size:11px;margin-top:8px;color:#555}
+  @media print{body{width:100%}}
+</style></head><body>
+<div class="c b lg">${rName}</div>
+${rAddress ? `<div class="c" style="font-size:11px;margin-top:2px">${rAddress}</div>` : ''}
+${rPhone   ? `<div class="c" style="font-size:11px">Ph: ${rPhone}</div>` : ''}
+${rGst     ? `<div class="c" style="font-size:10px">GSTIN: ${rGst}</div>` : ''}
+${rFssai   ? `<div class="c" style="font-size:10px">FSSAI: ${rFssai}</div>` : ''}
+<div class="div"></div>
+<div style="display:flex;justify-content:space-between;font-size:11px">
+  <span class="b">Bill #${bill.billNumber || bill.id}</span>
+  <span>${fmtDate(bill.createdAt)}</span>
+</div>
+${bill.customerName  ? `<div style="font-size:11px">Customer: ${bill.customerName}</div>`  : ''}
+${bill.customerPhone ? `<div style="font-size:11px">Phone: ${bill.customerPhone}</div>`    : ''}
+${bill.tableNumber   ? `<div style="font-size:11px">Table: ${bill.tableNumber}</div>`      : ''}
+<div style="font-size:11px">Type: ${ORDER_LABELS[bill.orderType] || bill.orderType || '—'}</div>
+<div class="div"></div>
+<table>
+  <thead><tr style="border-bottom:1px solid #000">
+    <th style="text-align:left;padding-bottom:3px">Item</th>
+    <th style="text-align:center">Qty × Rate</th>
+    <th style="text-align:right">Amt</th>
+  </tr></thead>
+  <tbody>${itemRows}</tbody>
+</table>
+<div class="div"></div>
+<table style="font-size:12px">
+  <tr><td colspan="2" style="padding:2px 0">Subtotal</td><td style="text-align:right;padding:2px 0">${fmt(bill.subtotal)}</td></tr>
+  ${discRow}${taxRow}
+  <tr><td colspan="2" style="padding:4px 0;font-weight:700;font-size:14px">TOTAL</td>
+      <td style="text-align:right;padding:4px 0;font-weight:700;font-size:14px">${fmt(bill.finalAmount || bill.total)}</td></tr>
+</table>
+<div class="div"></div>
+<div style="display:flex;justify-content:space-between;font-size:12px">
+  <span class="b">Payment: ${bill.paymentMode || '—'}</span>
+  <span style="color:${bill.paymentStatus === 'PENDING' ? '#c00' : '#080'}">${bill.paymentStatus || 'PAID'}</span>
+</div>
+${bill.notes ? `<div style="font-size:11px;margin-top:4px;color:#555">Note: ${bill.notes}</div>` : ''}
+<div class="div"></div>
+<div class="foot">Thank you for visiting!<br>Please come again ☺</div>
+</body></html>`
+
+  const w = window.open('', '_blank', 'width=420,height=640')
+  if (!w) { alert('Popup blocked — browser mein popup allow karo'); return }
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  setTimeout(() => { w.print(); w.close() }, 500)
+}
+
+// ── Bill Detail Modal ─────────────────────────────────────────────────────
+function BillDetailModal({ billId, restaurant, onClose }) {
+  const toast = useToast()
+  const [bill,    setBill]    = useState(null)
   const [loading, setLoading] = useState(true)
-  const [mode, setMode]       = useState('ALL')
-  const [search, setSearch]   = useState('')
 
   useEffect(() => {
-    load()
-  }, [page, mode])
+    billApi.getById(billId)
+      .then(setBill)
+      .catch(() => { toast.error('Bill load nahi hua'); onClose() })
+      .finally(() => setLoading(false))
+  }, [billId])
 
-  async function load() {
+  // Close on backdrop click
+  function handleBackdrop(e) {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  const overlayStyle = {
+    position: 'fixed', inset: 0, background: '#0009', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+  }
+  const cardStyle = {
+    background: 'var(--bg-card)', borderRadius: 16, padding: '1.75rem',
+    width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
+    boxShadow: '0 24px 64px #0006',
+  }
+
+  if (loading) return (
+    <div style={overlayStyle} onClick={handleBackdrop}>
+      <div style={{ ...cardStyle, display: 'flex', alignItems: 'center',
+        justifyContent: 'center', height: 200 }}>
+        <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading...</span>
+      </div>
+    </div>
+  )
+
+  if (!bill) return null
+
+  const items   = bill.items || []
+  const otColor = ORDER_COLORS[bill.orderType] || '#888'
+  const pmColor = PAY_COLORS[bill.paymentMode] || '#888'
+  const psColor = bill.paymentStatus === 'PENDING' ? '#ef4444'
+                : bill.paymentStatus === 'PARTIAL'  ? '#f59e0b' : '#10b981'
+
+  return (
+    <div style={overlayStyle} onClick={handleBackdrop}>
+      <div style={cardStyle}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between',
+          alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ fontSize: 19, fontWeight: 700 }}>
+              Bill #{bill.billNumber || bill.id}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+              {fmtDate(bill.createdAt)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => printReceipt(bill, restaurant)} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
+            }}>🖨️ Print</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none',
+              fontSize: 24, cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1,
+              padding: '0 4px' }}>×</button>
+          </div>
+        </div>
+
+        {/* Badges */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+          <Badge color={otColor}>{ORDER_LABELS[bill.orderType] || bill.orderType}</Badge>
+          {bill.tableNumber && <Badge color="#6366f1">Table {bill.tableNumber}</Badge>}
+          <Badge color={pmColor}>{bill.paymentMode || '—'}</Badge>
+          <Badge color={psColor}>{bill.paymentStatus || 'PAID'}</Badge>
+        </div>
+
+        {/* Customer */}
+        {(bill.customerName || bill.customerPhone) && (
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: 8,
+            padding: '10px 14px', marginBottom: '1.25rem', fontSize: 13 }}>
+            <div style={{ display: 'flex', gap: 16 }}>
+              {bill.customerName  && <span style={{ fontWeight: 600 }}>👤 {bill.customerName}</span>}
+              {bill.customerPhone && <span style={{ color: 'var(--text-muted)' }}>📞 {bill.customerPhone}</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Items */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+            letterSpacing: '0.06em', marginBottom: 8 }}>
+            ORDER ITEMS ({items.length})
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            {items.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                Items available nahi hain
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
+                    {['Item', 'Qty', 'Rate', 'Amount'].map((h, j) => (
+                      <th key={h} style={{ padding: '8px 12px', fontSize: 11,
+                        color: 'var(--text-muted)', fontWeight: 600,
+                        textAlign: j === 0 ? 'left' : 'right' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={it.id || i} style={{
+                      borderBottom: i < items.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <td style={{ padding: '9px 12px', fontWeight: 500 }}>
+                        {it.product?.name || '—'}
+                        {it.product?.shortCode && (
+                          <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-muted)',
+                            background: 'var(--bg-secondary)', padding: '1px 5px', borderRadius: 4 }}>
+                            {it.product.shortCode}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        {it.quantity}
+                      </td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>
+                        {fmt(it.price)}
+                      </td>
+                      <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600 }}>
+                        {fmt(it.total || (it.quantity * it.price))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Totals */}
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8,
+          overflow: 'hidden', marginBottom: bill.notes ? '1.25rem' : 0 }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+            <SumRow label="Subtotal" value={fmt(bill.subtotal)} />
+          </div>
+          {(bill.discount || 0) > 0 && (
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+              <SumRow label="Discount" value={`- ${fmt(bill.discount)}`} color="#10b981" />
+            </div>
+          )}
+          {(bill.taxAmount || 0) > 0 && (
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+              <SumRow label="Tax / GST" value={fmt(bill.taxAmount)} />
+            </div>
+          )}
+          <div style={{ padding: '12px 14px', background: 'var(--bg-secondary)' }}>
+            <SumRow label="Total" value={fmt(bill.finalAmount || bill.total)} bold />
+          </div>
+        </div>
+
+        {/* Notes */}
+        {bill.notes && (
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: 8,
+            padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+            📝 {bill.notes}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────
+export default function Bills() {
+  const rid   = useAuthStore(s => s.restaurantId)
+  const toast = useToast()
+
+  const [bills,      setBills]      = useState([])
+  const [page,       setPage]       = useState(0)
+  const [total,      setTotal]      = useState(0)
+  const [totalPg,    setTotalPg]    = useState(1)
+  const [loading,    setLoading]    = useState(true)
+  const [mode,       setMode]       = useState('ALL')
+  const [from,       setFrom]       = useState('')
+  const [to,         setTo]         = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const [restaurant, setRestaurant] = useState(null)
+
+  // Restaurant info for receipt header
+  useEffect(() => {
+    api.get(`/restaurants/${rid}`).then(setRestaurant).catch(() => {})
+  }, [rid])
+
+  const load = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page, size: 20 })
       if (mode !== 'ALL') params.set('paymentMode', mode)
+      if (from) params.set('from', from)
+      if (to)   params.set('to',   to)
       const res = await billApi.getAll(rid, params.toString())
       if (res?.content) {
         setBills(res.content)
         setTotal(res.totalElements || 0)
-        setTotalPg(res.totalPages || 1)
+        setTotalPg(res.totalPages  || 1)
       }
     } catch (_) {
       setBills(MOCK_BILLS)
@@ -40,92 +339,119 @@ export default function Bills() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [rid, page, mode, from, to])
 
-  const badge = (mode) => {
-    const map = { CASH: '#10b981', UPI: '#6366f1', CARD: '#f59e0b' }
-    const color = map[mode] || '#888'
-    return (
-      <span style={{
-        fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600,
-        background: color + '20', color,
-      }}>{mode || '—'}</span>
-    )
+  useEffect(() => { load() }, [load])
+
+  function handleModeChange(m) { setMode(m); setPage(0) }
+  function clearDates() { setFrom(''); setTo(''); setPage(0) }
+
+  const inputStyle = {
+    padding: '6px 10px', borderRadius: 7, border: '1px solid var(--border)',
+    background: 'var(--bg-card)', color: 'var(--text)', fontSize: 12,
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Bills</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>GET /api/v1/bills — paginated</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {MODES.map(m => (
-            <button key={m} onClick={() => { setMode(m); setPage(0) }} style={{
-              padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-              fontSize: 12, cursor: 'pointer', fontWeight: mode === m ? 600 : 400,
-              background: mode === m ? 'var(--accent-bg)' : 'var(--bg-card)',
-              color: mode === m ? 'var(--accent)' : 'var(--text-muted)',
-            }}>{m}</button>
-          ))}
-        </div>
+      {/* Header */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700 }}>🧾 Bills</h1>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+          {total.toLocaleString('en-IN')} bills · row click karo details dekhne ke liye
+        </p>
       </div>
 
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        {/* Total */}
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', fontSize: 13, color: 'var(--text-muted)' }}>
-          {total.toLocaleString('en-IN')} bills
-        </div>
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+        marginBottom: '1rem' }}>
+        {/* Date range */}
+        <input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(0) }}
+          style={inputStyle} />
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>to</span>
+        <input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(0) }}
+          style={inputStyle} />
+        {(from || to) && (
+          <button onClick={clearDates} style={{ ...inputStyle, cursor: 'pointer',
+            color: 'var(--text-muted)' }}>✕ Clear</button>
+        )}
 
+        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+
+        {/* Payment mode */}
+        {MODES.map(m => (
+          <button key={m} onClick={() => handleModeChange(m)} style={{
+            padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+            fontSize: 12, cursor: 'pointer', fontWeight: mode === m ? 600 : 400,
+            background: mode === m ? 'var(--accent-bg)' : 'var(--bg-card)',
+            color:      mode === m ? 'var(--accent)'    : 'var(--text-muted)',
+          }}>{m}</button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: 12, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--bg-page)' }}>
-              {['Bill #', 'Customer', 'Items', 'Amount', 'Payment', 'Order Type', 'Date'].map(h => (
-                <th key={h} style={{
-                  textAlign: 'left', padding: '10px 16px',
-                  fontSize: 11, color: 'var(--text-muted)', fontWeight: 500,
-                  borderBottom: '1px solid var(--border)',
-                }}>{h}</th>
+              {['Bill #', 'Customer', 'Items', 'Amount', 'Payment', 'Type', 'Date'].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '10px 16px', fontSize: 11,
+                  color: 'var(--text-muted)', fontWeight: 500,
+                  borderBottom: '1px solid var(--border)' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading
-              ? Array.from({ length: 5 }).map((_, i) => (
+              ? Array.from({ length: 7 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 7 }).map((_, j) => (
-                      <td key={j} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ height: 14, borderRadius: 4, background: 'var(--border)', width: j === 0 ? 40 : 80 }} />
+                      <td key={j} style={{ padding: '13px 16px',
+                        borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ height: 13, borderRadius: 4, background: 'var(--border)',
+                          width: j === 0 ? 50 : 90 }} />
                       </td>
                     ))}
                   </tr>
                 ))
               : bills.map(b => (
-                  <tr key={b.id} style={{ transition: 'background 0.1s' }}
+                  <tr key={b.id}
+                    onClick={() => setSelectedId(b.id)}
+                    style={{ cursor: 'pointer', transition: 'background 0.12s' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-page)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>
-                      #{b.id}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                      fontWeight: 700, color: 'var(--accent)' }}>
+                      #{b.billNumber || b.id}
                     </td>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                      {b.customerName || b.phone || '—'}
+                      {b.customerName || b.customerPhone
+                        || <span style={{ color: 'var(--text-muted)' }}>Guest</span>}
                     </td>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                      {b.itemCount || '—'}
+                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                      color: 'var(--text-muted)' }}>
+                      {b.itemCount ?? '—'}
                     </td>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>
-                      {fmt(b.total || b.finalAmount)}
+                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                      fontWeight: 600 }}>
+                      {fmt(b.finalAmount || b.total)}
                     </td>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                      {badge(b.paymentMode)}
+                      <Badge color={PAY_COLORS[b.paymentMode] || '#888'}>
+                        {b.paymentMode || '—'}
+                      </Badge>
                     </td>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                      {b.orderType?.replace('_', ' ')}
+                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                      <Badge color={ORDER_COLORS[b.orderType] || '#888'}>
+                        {ORDER_LABELS[b.orderType] || b.orderType?.replace('_', ' ') || '—'}
+                      </Badge>
                     </td>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 12 }}>
-                      {b.createdAt ? new Date(b.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                      color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {b.createdAt
+                        ? new Date(b.createdAt).toLocaleString('en-IN',
+                            { dateStyle: 'short', timeStyle: 'short' })
+                        : '—'}
                     </td>
                   </tr>
                 ))
@@ -133,9 +459,20 @@ export default function Bills() {
           </tbody>
         </table>
 
+        {!loading && bills.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '52px', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>🧾</div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Koi bill nahi mila</div>
+            <div style={{ fontSize: 12 }}>Filter change karo ya date range clear karo</div>
+          </div>
+        )}
+
         {/* Pagination */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Page {page + 1} of {totalPg}</span>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Page {page + 1} of {totalPg} · {total.toLocaleString('en-IN')} bills
+          </span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{
               padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border)',
@@ -150,14 +487,24 @@ export default function Bills() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {selectedId && (
+        <BillDetailModal
+          billId={selectedId}
+          restaurant={restaurant}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   )
 }
 
+// ── Mock data (fallback when API unreachable) ─────────────────────────────
 const MOCK_BILLS = [
-  { id: 1001, customerName: 'Rahul Kumar', itemCount: 4, total: 850, paymentMode: 'UPI', orderType: 'DINE_IN', createdAt: new Date().toISOString() },
-  { id: 1002, customerName: 'Priya Sharma', itemCount: 2, total: 320, paymentMode: 'CASH', orderType: 'PICKUP', createdAt: new Date().toISOString() },
-  { id: 1003, customerName: 'Amit Verma', itemCount: 6, total: 1450, paymentMode: 'CARD', orderType: 'DINE_IN', createdAt: new Date().toISOString() },
-  { id: 1004, customerName: 'Sneha Patel', itemCount: 3, total: 560, paymentMode: 'UPI', orderType: 'DELIVERY', createdAt: new Date().toISOString() },
-  { id: 1005, customerName: 'Ravi Singh', itemCount: 1, total: 180, paymentMode: 'CASH', orderType: 'PICKUP', createdAt: new Date().toISOString() },
+  { id: 1001, billNumber: 'B-1001', customerName: 'Rahul Kumar',  itemCount: 4, total: 850,  finalAmount: 850,  paymentMode: 'UPI',  orderType: 'DINE_IN',  createdAt: new Date().toISOString() },
+  { id: 1002, billNumber: 'B-1002', customerName: 'Priya Sharma', itemCount: 2, total: 320,  finalAmount: 320,  paymentMode: 'CASH', orderType: 'PICKUP',   createdAt: new Date().toISOString() },
+  { id: 1003, billNumber: 'B-1003', customerName: 'Amit Verma',   itemCount: 6, total: 1450, finalAmount: 1450, paymentMode: 'CARD', orderType: 'DINE_IN',  createdAt: new Date().toISOString() },
+  { id: 1004, billNumber: 'B-1004', customerName: 'Sneha Patel',  itemCount: 3, total: 560,  finalAmount: 560,  paymentMode: 'UPI',  orderType: 'DELIVERY', createdAt: new Date().toISOString() },
+  { id: 1005, billNumber: 'B-1005', customerName: 'Ravi Singh',   itemCount: 1, total: 180,  finalAmount: 180,  paymentMode: 'CASH', orderType: 'PICKUP',   createdAt: new Date().toISOString() },
 ]

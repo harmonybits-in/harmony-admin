@@ -10,6 +10,53 @@ const TABS = ['🏪 Business Profile', '🔑 Login Credentials', '📜 Legal', '
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const DAY_SHORT = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun' }
 
+// hh:mm (24h) → "9:00 AM"
+function to12h(t) {
+  if (!t) return ''
+  const [h, m] = t.split(':').map(Number)
+  const ampm = h < 12 ? 'AM' : 'PM'
+  const h12  = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+const OPEN_PRESETS  = ['05:00','06:00','07:00','08:00','09:00','10:00','11:00']
+const CLOSE_PRESETS = ['18:00','19:00','20:00','21:00','22:00','23:00','23:59']
+
+function TimePicker({ label, value, onChange, presets }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>
+        {label}
+      </label>
+      {/* Preset chips */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        {presets.map(t => (
+          <button key={t} type="button" onClick={() => onChange(t)}
+            style={{ padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', border: '1.5px solid',
+              borderColor: value === t ? 'var(--accent)' : 'var(--border)',
+              background: value === t ? 'var(--accent)' : 'transparent',
+              color: value === t ? '#fff' : 'var(--text-muted)',
+              transition: 'all .15s' }}>
+            {to12h(t)}
+          </button>
+        ))}
+      </div>
+      {/* Native time input for custom */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <input type="time" value={value ?? ''} onChange={e => onChange(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--bg-page)', color: 'var(--text)', fontSize: 13, minWidth: 130 }} />
+        {value && (
+          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>
+            {to12h(value)}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Input({ label, value, onChange, type = 'text', placeholder = '', disabled = false, hint }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -398,11 +445,19 @@ export default function Settings() {
             ? [...Array(2)].map((_, i) => <SkeletonLine key={i} height={38} style={{ marginBottom: 14 }} />)
             : (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-                  <Input label="Opening Time" value={hours.openTime} type="time"
-                    onChange={e => { setHours(h => ({ ...h, openTime: e.target.value })); setHoursDirty(true) }} />
-                  <Input label="Closing Time" value={hours.closeTime} type="time"
-                    onChange={e => { setHours(h => ({ ...h, closeTime: e.target.value })); setHoursDirty(true) }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+                  <TimePicker
+                    label="🌅 Opening Time"
+                    value={hours.openTime}
+                    presets={OPEN_PRESETS}
+                    onChange={v => { setHours(h => ({ ...h, openTime: v })); setHoursDirty(true) }}
+                  />
+                  <TimePicker
+                    label="🌙 Closing Time"
+                    value={hours.closeTime}
+                    presets={CLOSE_PRESETS}
+                    onChange={v => { setHours(h => ({ ...h, closeTime: v })); setHoursDirty(true) }}
+                  />
                 </div>
 
                 <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
