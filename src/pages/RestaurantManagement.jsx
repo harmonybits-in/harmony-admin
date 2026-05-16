@@ -451,11 +451,13 @@ function RestaurantModal({ initial, onClose, onSave }) {
 function StatsModal({ restaurant, onClose, onRefresh }) {
   const api               = adminApi
   const toast             = useToast()
-  const [tab,     setTab]     = useState('stats')    // 'stats' | 'subscription'
+  const [tab,     setTab]     = useState('stats')    // 'stats' | 'subscription' | 'addons'
   const [stats,   setStats]   = useState(null)
   const [sub,     setSub]     = useState(null)
+  const [addons,  setAddons]  = useState([])
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
+  const [grantingAddon, setGrantingAddon] = useState(null)
 
   // Subscription form
   const [selPlan, setSelPlan] = useState('GROWTH_MONTHLY')
@@ -487,9 +489,11 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
         todayBills: 0, todayRevenue: 0,
       })),
       api.getSubscription(restaurant.id).catch(() => null),
-    ]).then(([s, sub]) => {
+      api.getFeatureAddons(restaurant.id).catch(() => []),
+    ]).then(([s, sub, ads]) => {
       setStats(s)
       setSub(sub)
+      setAddons(Array.isArray(ads) ? ads : [])
     }).finally(() => setLoading(false))
   }, [restaurant.id])
 
@@ -531,6 +535,18 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
     finally { setSaving(false) }
   }
 
+  async function handleGrantAddon(addonId) {
+    if (!confirm(`Grant "${addonId}" to ${restaurant.name} for 365 days (free)?`)) return
+    setGrantingAddon(addonId)
+    try {
+      const res = await api.grantAddon(restaurant.id, addonId, 365)
+      toast.success(`✅ ${res.addonName} granted till ${res.endDate}`)
+      const ads = await api.getFeatureAddons(restaurant.id).catch(() => [])
+      setAddons(Array.isArray(ads) ? ads : [])
+    } catch (e) { toast.error(e.message || 'Grant failed') }
+    finally { setGrantingAddon(null) }
+  }
+
   const plan    = PLAN_CFG[restaurant.planType] || { color: '#888', bg: '#f3f4f6' }
   const subStatus = sub?.status || 'NONE'
   const statusColor = { ACTIVE: '#16a34a', EXPIRING_SOON: '#f59e0b', EXPIRED: '#ef4444', NONE: '#888' }
@@ -568,7 +584,7 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-page)' }}>
-        {[['stats', '📊 Stats'], ['subscription', '💳 Subscription']].map(([key, label]) => (
+        {[['stats', '📊 Stats'], ['subscription', '💳 Subscription'], ['addons', '🛍️ Add-ons']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
             padding: '10px 20px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
             background: tab === key ? 'var(--bg-card)' : 'transparent',
@@ -718,6 +734,12 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
               </div>
             )}
 
+            {/* Restaurant ID helper */}
+            <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--bg-page)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+              🔑 Restaurant ID: <strong style={{ color: 'var(--text)', fontFamily: 'monospace' }}>{restaurant.id}</strong>
+              &nbsp;·&nbsp; Order page: <a href={`https://www.harmonybits.in/order/${restaurant.id}`} target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>harmonybits.in/order/{restaurant.id}</a>
+            </div>
+
             {/* History */}
             {sub?.history?.length > 0 && (
               <div style={{ marginTop: 16 }}>
@@ -743,7 +765,38 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
               </div>
             )}
           </div>
-        )}
+        ) : tab === 'addons' ? (
+          <div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Feature Add-ons</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Grant add-ons directly to this restaurant (no payment required)</div>
+            </div>
+            {addons.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {addons.map(a => (
+                  <div key={a.addonId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: `1px solid ${a.isActive ? '#10b981' : 'var(--border)'}`, borderRadius: 10, background: a.isActive ? '#f0fdf4' : 'var(--bg-page)' }}>
+                    <span style={{ fontSize: 22 }}>{a.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{a.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {a.isActive ? `✅ Active till ${a.endDate}` : `₹${a.priceYearly}/yr`}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleGrantAddon(a.addonId)}
+                      disabled={grantingAddon === a.addonId}
+                      style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: a.isActive ? '#e5e7eb' : '#6366f1', color: a.isActive ? '#6b7280' : '#fff', fontWeight: 700, fontSize: 12, cursor: grantingAddon === a.addonId ? 'not-allowed' : 'pointer' }}
+                    >
+                      {grantingAddon === a.addonId ? '⏳' : a.isActive ? '🔄 Renew' : '🎁 Grant'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <ModalFooter>

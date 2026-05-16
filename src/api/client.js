@@ -151,6 +151,8 @@ export const adminApi = {
   activateSub:     (id, planId, days) => api.post(`/admin/restaurants/${id}/subscription/activate`, { planId, days }),
   extendSub:       (id, days)     => api.post(`/admin/restaurants/${id}/subscription/extend`, { planId: 'EXTEND', days }),
   deactivateSub:   (id)           => api.delete(`/admin/restaurants/${id}/subscription`),
+  getFeatureAddons:(id)           => api.get(`/admin/restaurants/${id}/feature-addons`),
+  grantAddon:      (id, addonId, days) => api.post(`/admin/restaurants/${id}/feature-addons/${addonId}/grant?days=${days}`),
 }
 
 // ── Leave Management ─────────────────────────────────────────────
