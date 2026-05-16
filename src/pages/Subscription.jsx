@@ -225,7 +225,7 @@ function FeatureAddonShop({ restaurantId, token, user }) {
       <div style={{ marginBottom: 16 }}>
         <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>🛍️ Feature Add-on Shop</h3>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-          Apne plan mein missing features individually khareed sakte ho — fixed price, 30 days
+          Apne plan mein missing features individually khareed sakte ho — yearly fixed price
         </p>
       </div>
 
@@ -266,10 +266,10 @@ function FeatureAddonShop({ restaurantId, token, user }) {
               ))}
             </ul>
 
-            {/* Fixed price */}
+            {/* Fixed yearly price */}
             <div style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 22, fontWeight: 800 }}>₹{addon.priceMonthly}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>/ 30 days</span>
+              <span style={{ fontSize: 22, fontWeight: 800 }}>₹{addon.priceYearly}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>/ year</span>
             </div>
 
             {addon.isActive ? (
@@ -299,7 +299,7 @@ function FeatureAddonShop({ restaurantId, token, user }) {
       </div>
 
       <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
-        * Add-ons 30 days ke liye active rehte hain. Renew manually karo expiry ke baad.
+        * Add-ons 1 saal ke liye active rehte hain. Renew manually karo expiry ke baad.
         Growth plan users sirf Multi-Branch add-on le sakte hain. Enterprise mein sab included hai.
       </div>
     </div>
