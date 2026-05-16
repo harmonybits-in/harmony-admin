@@ -136,7 +136,6 @@ function ConfigTab({ rid, toast }) {
   const [config, setConfig] = useState({
     enabled: false,
     provider: 'CLAUDE',
-    openaiApiKey: '',
     widgetTitle: 'Chat with us',
     widgetColor: '#e53e3e',
     greetingMessage: 'Hello! How can I help you today?',
@@ -146,7 +145,6 @@ function ConfigTab({ rid, toast }) {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [showKey, setShowKey] = useState(false)
   const [saved, setSaved] = useState(false)
   const [embedCopied, setEmbedCopied] = useState(false)
 
@@ -278,32 +276,6 @@ function ConfigTab({ rid, toast }) {
           ))}
         </div>
 
-        {config.provider === 'OPENAI' && (
-          <div style={{ marginTop: 12 }}>
-            <label style={labelStyle}>OpenAI API Key</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showKey ? 'text' : 'password'}
-                value={config.openaiApiKey}
-                onChange={upd('openaiApiKey')}
-                placeholder="sk-..."
-                style={{ ...inputStyle, paddingRight: 44 }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey(s => !s)}
-                style={{
-                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 16, color: 'var(--text-muted)',
-                }}
-              >{showKey ? '🙈' : '👁️'}</button>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              Your key is stored securely on the server and never exposed to clients.
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Widget Appearance ── */}
