@@ -58,40 +58,38 @@ function TypingDots({ color }) {
   )
 }
 
-// ── Render message text — turns URLs into clickable buttons ──────
+// ── Render message text — markdown bold + URLs as buttons ────────
 function renderContent(text) {
-  // Split on URLs; trailing punctuation like . , ! is excluded from the URL
-  const parts = text.split(/(https?:\/\/[^\s]+)/g)
-  return parts.map((part, i) => {
-    if (/^https?:\/\//.test(part)) {
-      // Strip trailing punctuation that's part of the sentence, not the URL
-      const url = part.replace(/[.,!?:;'"]+$/, '')
-      const trailing = part.slice(url.length)
-      const isGoogle = /g\.page|google\.com\/maps|google\.com\/search/i.test(url)
-      return (
-        <span key={i}>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
+  // Split into lines, then process each line for bold + URLs
+  return text.split('\n').map((line, li) => {
+    const parts = line.split(/(https?:\/\/[^\s]+|\*\*[^*]+\*\*)/g)
+    const rendered = parts.map((part, i) => {
+      if (/^\*\*[^*]+\*\*$/.test(part))
+        return <strong key={i}>{part.slice(2, -2)}</strong>
+      if (/^https?:\/\//.test(part)) {
+        const url = part.replace(/[.,!?:;'"]+$/, '')
+        const trailing = part.slice(url.length)
+        const isGoogle = /g\.page|google\.com\/maps|google\.com\/search/i.test(url)
+        const isMaps = /maps\.google|google\.com\/maps|\?q=/.test(url)
+        return (
+          <span key={i}>
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              margin: '6px 0 2px', padding: '8px 18px',
+              margin: '4px 0 2px', padding: '7px 16px',
               borderRadius: 24, border: '1.5px solid #93c5fd',
               background: '#eff6ff', color: '#1d4ed8',
-              fontSize: 13, fontWeight: 700,
-              textDecoration: 'none', cursor: 'pointer',
-              verticalAlign: 'middle',
-            }}
-          >
-            {isGoogle ? '⭐' : '🔗'}
-            {isGoogle ? 'Write a Google Review →' : 'Open Link →'}
-          </a>
-          {trailing}
-        </span>
-      )
-    }
-    return part ? <span key={i}>{part}</span> : null
+              fontSize: 13, fontWeight: 700, textDecoration: 'none',
+            }}>
+              {isGoogle ? '⭐' : isMaps ? '📍' : '🔗'}
+              {isGoogle ? 'Write a Google Review →' : isMaps ? 'Open in Maps →' : 'Open Link →'}
+            </a>
+            {trailing}
+          </span>
+        )
+      }
+      return part ? <span key={i}>{part}</span> : null
+    })
+    return <span key={li}>{rendered}{li < text.split('\n').length - 1 ? <br /> : null}</span>
   })
 }
 
@@ -110,6 +108,7 @@ export default function ChatWidget() {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [started, setStarted] = useState(false)
+  const [confirmedOrderId, setConfirmedOrderId] = useState(null)
 
   const messagesEndRef = useRef(null)
 
@@ -153,6 +152,7 @@ export default function ChatWidget() {
       })
       const reply = res?.reply || res?.message || res?.content || 'Sorry, something went wrong.'
       setMessages(m => [...m, { role: 'ASSISTANT', content: reply }])
+      if (res?.orderId) setConfirmedOrderId(res.orderId)
     } catch (err) {
       setMessages(m => [...m, {
         role: 'ASSISTANT',
@@ -383,6 +383,25 @@ export default function ChatWidget() {
         })}
 
         {sending && <TypingDots color={accentColor} />}
+
+        {confirmedOrderId && (
+          <div style={{
+            margin: '8px 0 12px', padding: '14px 16px', borderRadius: 14,
+            background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+            border: '1.5px solid #86efac',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 22 }}>✅</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#15803d' }}>Order Confirmed!</span>
+            </div>
+            <div style={{ fontSize: 13, color: '#166534' }}>
+              Order ID: <strong>#{confirmedOrderId}</strong>
+            </div>
+            <div style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
+              WhatsApp confirmation aapke number pe bheja ja raha hai.
+            </div>
+          </div>
+        )}
 
         <div ref={messagesEndRef} />
       </div>
