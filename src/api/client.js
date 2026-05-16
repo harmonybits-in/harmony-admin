@@ -211,3 +211,11 @@ export const referralApi = {
   getStats: (rid)  => api.get(`/referral/${rid}/stats`),
   apply:    (rid, referralCode) => api.post('/referral/apply', { referralCode, newRestaurantId: rid }),
 }
+
+// ── Feature Add-on Shop ────────────────────────────────────────────
+export const featureAddonApi = {
+  getAddons:   (rid)                        => api.get(`/feature-addons/${rid}`),
+  getActive:   (rid)                        => api.get(`/feature-addons/${rid}/active`),
+  createOrder: (rid, addonId, billingCycle) => api.post(`/feature-addons/${rid}/order`, { addonId, billingCycle }),
+  verify:      (body)                       => api.post('/feature-addons/verify', body),
+}

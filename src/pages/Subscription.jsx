@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { featureAddonApi } from '../api/client'
 
 const PLANS = [
   {
@@ -69,6 +70,7 @@ const PLANS = [
       'AI Chatbot (Claude/GPT)',
       'Due Payments Tracking',
       'Advanced Reports & Analytics',
+      'Multi-Branch (up to 3 outlets)',
     ],
   },
   {
@@ -89,6 +91,7 @@ const PLANS = [
       'AI Chatbot (Claude/GPT)',
       'Due Payments Tracking',
       'Advanced Reports & Analytics',
+      'Multi-Branch (up to 3 outlets)',
     ],
   },
   {
@@ -100,7 +103,7 @@ const PLANS = [
     features: [
       'Everything in Growth',
       'Unlimited Devices',
-      'Franchise / Multi-Branch Control',
+      'Unlimited Branches + Full Franchise Control',
       'API Access',
       'Custom Reports',
       'Dedicated Support',
@@ -117,7 +120,7 @@ const PLANS = [
     features: [
       'Everything in Growth',
       'Unlimited Devices',
-      'Franchise / Multi-Branch Control',
+      'Unlimited Branches + Full Franchise Control',
       'API Access',
       'Custom Reports',
       'Dedicated Support',
@@ -139,6 +142,212 @@ function loadRazorpay() {
     script.onerror = () => resolve(false)
     document.body.appendChild(script)
   })
+}
+
+// ── Feature Add-on Shop ──────────────────────────────────────────
+function FeatureAddonShop({ restaurantId, token, user }) {
+  const [addons, setAddons] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [paying, setPaying] = useState(null)       // addonId being paid
+  const [cycle, setCycle] = useState('MONTHLY')    // billing cycle toggle
+  const [msg, setMsg] = useState(null)
+
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+
+  useEffect(() => {
+    featureAddonApi.getAddons(restaurantId)
+      .then(res => setAddons(Array.isArray(res) ? res : []))
+      .catch(() => setAddons([]))
+      .finally(() => setLoading(false))
+  }, [restaurantId])
+
+  async function buyAddon(addon) {
+    setMsg(null)
+    setPaying(addon.addonId)
+    try {
+      const loaded = await new Promise(resolve => {
+        if (window.Razorpay) { resolve(true); return }
+        const s = document.createElement('script')
+        s.src = 'https://checkout.razorpay.com/v1/checkout.js'
+        s.onload = () => resolve(true); s.onerror = () => resolve(false)
+        document.body.appendChild(s)
+      })
+      if (!loaded) { setMsg({ type: 'error', text: 'Razorpay load nahi hua' }); setPaying(null); return }
+
+      const order = await featureAddonApi.createOrder(restaurantId, addon.addonId, cycle)
+
+      if (order.mock) {
+        const res = await featureAddonApi.verify({
+          restaurantId, razorpayOrderId: order.orderId,
+          razorpayPaymentId: 'pay_MOCK_' + Date.now(),
+          razorpaySignature: 'mock_sig',
+        })
+        setMsg({ type: 'success', text: res.message || addon.name + ' activated!' })
+        featureAddonApi.getAddons(restaurantId).then(res => setAddons(Array.isArray(res) ? res : [])).catch(() => {})
+        setPaying(null)
+        return
+      }
+
+      const options = {
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        name: 'Harmony Bits Private Limited',
+        description: addon.name + ' Add-on (' + cycle + ')',
+        order_id: order.orderId,
+        prefill: { name: user?.name || '', email: user?.email || '' },
+        theme: { color: '#6366f1' },
+        handler: async function(response) {
+          try {
+            const res = await featureAddonApi.verify({
+              restaurantId,
+              razorpayOrderId:  response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            })
+            setMsg({ type: 'success', text: res.message || addon.name + ' activated! 🎉' })
+            featureAddonApi.getAddons(restaurantId).then(r => setAddons(Array.isArray(r) ? r : [])).catch(() => {})
+          } catch (e) {
+            setMsg({ type: 'error', text: e.message || 'Payment verify nahi hua' })
+          }
+          setPaying(null)
+        },
+        modal: { ondismiss: () => setPaying(null) },
+      }
+      new window.Razorpay(options).open()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message || 'Payment start nahi hua' })
+      setPaying(null)
+    }
+  }
+
+  const yearlySavings = (a) => {
+    const monthly12 = a.priceMonthly * 12
+    return Math.round(monthly12 - a.priceYearly)
+  }
+
+  if (loading) return null
+
+  return (
+    <div style={{ marginTop: 40 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>🛍️ Feature Add-on Shop</h3>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+            Starter plan mein missing features individually khareed sakte ho
+          </p>
+        </div>
+        {/* Billing cycle toggle */}
+        <div style={{
+          display: 'flex', background: 'var(--bg-page)', border: '1px solid var(--border)',
+          borderRadius: 9, padding: 3, gap: 2,
+        }}>
+          {['MONTHLY', 'YEARLY'].map(c => (
+            <button
+              key={c}
+              onClick={() => setCycle(c)}
+              style={{
+                padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700,
+                background: cycle === c ? 'var(--accent)' : 'transparent',
+                color: cycle === c ? '#fff' : 'var(--text-muted)',
+                transition: '.15s',
+              }}
+            >
+              {c === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+              {c === 'YEARLY' && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.85 }}>Save ~25%</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {msg && (
+        <div style={{
+          padding: '10px 16px', borderRadius: 9, marginBottom: 16,
+          background: msg.type === 'success' ? '#10b98115' : '#ef444415',
+          border: `1px solid ${msg.type === 'success' ? '#10b98140' : '#ef444440'}`,
+          fontSize: 13, color: msg.type === 'success' ? '#10b981' : '#ef4444',
+        }}>{msg.text}</div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+        {addons.map(addon => (
+          <div key={addon.addonId} style={{
+            border: addon.isActive ? '2px solid #10b981' : '1px solid var(--border)',
+            borderRadius: 14, padding: '18px 16px', position: 'relative',
+            background: addon.isActive ? '#10b98108' : 'var(--bg-card)',
+            opacity: addon.canBuy || addon.isActive ? 1 : 0.55,
+          }}>
+            {/* Active badge */}
+            {addon.isActive && (
+              <div style={{
+                position: 'absolute', top: 12, right: 12,
+                background: '#10b981', color: '#fff', fontSize: 9, fontWeight: 800,
+                padding: '2px 8px', borderRadius: 10,
+              }}>ACTIVE</div>
+            )}
+
+            <div style={{ fontSize: 28, marginBottom: 8 }}>{addon.icon}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{addon.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+              {addon.description}
+            </div>
+
+            {/* Features */}
+            <ul style={{ margin: '0 0 12px', padding: '0 0 0 14px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
+              {(Array.isArray(addon.features) ? addon.features : []).slice(0, 4).map((f, i) => (
+                <li key={i}>{f}</li>
+              ))}
+            </ul>
+
+            {/* Price */}
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontSize: 20, fontWeight: 800 }}>
+                ₹{cycle === 'MONTHLY' ? addon.priceMonthly : addon.priceYearly}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
+                /{cycle === 'MONTHLY' ? 'mo' : 'yr'}
+              </span>
+              {cycle === 'YEARLY' && yearlySavings(addon) > 0 && (
+                <div style={{ fontSize: 10, color: '#10b981', fontWeight: 700, marginTop: 2 }}>
+                  Save ₹{yearlySavings(addon).toLocaleString()}
+                </div>
+              )}
+            </div>
+
+            {/* CTA */}
+            {addon.isActive ? (
+              <div style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                ✅ Active till {addon.endDate} ({addon.billingCycle})
+              </div>
+            ) : addon.canBuy ? (
+              <button
+                onClick={() => buyAddon(addon)}
+                disabled={paying === addon.addonId}
+                style={{
+                  width: '100%', padding: '9px 0', borderRadius: 9, border: 'none',
+                  background: paying === addon.addonId ? 'var(--border)' : '#6366f1',
+                  color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: paying === addon.addonId ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {paying === addon.addonId ? '⏳ Processing…' : 'Add to Plan →'}
+              </button>
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                Included in your current plan
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
+        * Add-ons renew monthly or yearly. Cancel anytime — active till current period ends.
+        Growth plan users can only purchase Multi-Branch add-on. Enterprise includes all features.
+      </div>
+    </div>
+  )
 }
 
 export default function Subscription() {
@@ -488,6 +697,9 @@ export default function Subscription() {
           )
         })}
       </div>
+
+      {/* Feature Add-on Shop */}
+      <FeatureAddonShop restaurantId={restaurantId} token={token} user={user} />
 
       {/* History */}
       {sub?.history?.length > 0 && (
