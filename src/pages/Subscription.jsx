@@ -148,11 +148,8 @@ function loadRazorpay() {
 function FeatureAddonShop({ restaurantId, token, user }) {
   const [addons, setAddons] = useState([])
   const [loading, setLoading] = useState(true)
-  const [paying, setPaying] = useState(null)       // addonId being paid
-  const [cycle, setCycle] = useState('MONTHLY')    // billing cycle toggle
+  const [paying, setPaying] = useState(null)
   const [msg, setMsg] = useState(null)
-
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
   useEffect(() => {
     featureAddonApi.getAddons(restaurantId)
@@ -174,7 +171,7 @@ function FeatureAddonShop({ restaurantId, token, user }) {
       })
       if (!loaded) { setMsg({ type: 'error', text: 'Razorpay load nahi hua' }); setPaying(null); return }
 
-      const order = await featureAddonApi.createOrder(restaurantId, addon.addonId, cycle)
+      const order = await featureAddonApi.createOrder(restaurantId, addon.addonId, 'MONTHLY')
 
       if (order.mock) {
         const res = await featureAddonApi.verify({
@@ -183,7 +180,7 @@ function FeatureAddonShop({ restaurantId, token, user }) {
           razorpaySignature: 'mock_sig',
         })
         setMsg({ type: 'success', text: res.message || addon.name + ' activated!' })
-        featureAddonApi.getAddons(restaurantId).then(res => setAddons(Array.isArray(res) ? res : [])).catch(() => {})
+        featureAddonApi.getAddons(restaurantId).then(r => setAddons(Array.isArray(r) ? r : [])).catch(() => {})
         setPaying(null)
         return
       }
@@ -193,7 +190,7 @@ function FeatureAddonShop({ restaurantId, token, user }) {
         amount: order.amount,
         currency: order.currency || 'INR',
         name: 'Harmony Bits Private Limited',
-        description: addon.name + ' Add-on (' + cycle + ')',
+        description: addon.name + ' Add-on — 30 days',
         order_id: order.orderId,
         prefill: { name: user?.name || '', email: user?.email || '' },
         theme: { color: '#6366f1' },
@@ -221,44 +218,15 @@ function FeatureAddonShop({ restaurantId, token, user }) {
     }
   }
 
-  const yearlySavings = (a) => {
-    const monthly12 = a.priceMonthly * 12
-    return Math.round(monthly12 - a.priceYearly)
-  }
-
   if (loading) return null
 
   return (
     <div style={{ marginTop: 40 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>🛍️ Feature Add-on Shop</h3>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>
-            Starter plan mein missing features individually khareed sakte ho
-          </p>
-        </div>
-        {/* Billing cycle toggle */}
-        <div style={{
-          display: 'flex', background: 'var(--bg-page)', border: '1px solid var(--border)',
-          borderRadius: 9, padding: 3, gap: 2,
-        }}>
-          {['MONTHLY', 'YEARLY'].map(c => (
-            <button
-              key={c}
-              onClick={() => setCycle(c)}
-              style={{
-                padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700,
-                background: cycle === c ? 'var(--accent)' : 'transparent',
-                color: cycle === c ? '#fff' : 'var(--text-muted)',
-                transition: '.15s',
-              }}
-            >
-              {c === 'MONTHLY' ? 'Monthly' : 'Yearly'}
-              {c === 'YEARLY' && <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.85 }}>Save ~25%</span>}
-            </button>
-          ))}
-        </div>
+      <div style={{ marginBottom: 16 }}>
+        <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>🛍️ Feature Add-on Shop</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+          Apne plan mein missing features individually khareed sakte ho — fixed price, 30 days
+        </p>
       </div>
 
       {msg && (
@@ -278,7 +246,6 @@ function FeatureAddonShop({ restaurantId, token, user }) {
             background: addon.isActive ? '#10b98108' : 'var(--bg-card)',
             opacity: addon.canBuy || addon.isActive ? 1 : 0.55,
           }}>
-            {/* Active badge */}
             {addon.isActive && (
               <div style={{
                 position: 'absolute', top: 12, right: 12,
@@ -293,32 +260,21 @@ function FeatureAddonShop({ restaurantId, token, user }) {
               {addon.description}
             </div>
 
-            {/* Features */}
-            <ul style={{ margin: '0 0 12px', padding: '0 0 0 14px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
+            <ul style={{ margin: '0 0 14px', padding: '0 0 0 14px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
               {(Array.isArray(addon.features) ? addon.features : []).slice(0, 4).map((f, i) => (
                 <li key={i}>{f}</li>
               ))}
             </ul>
 
-            {/* Price */}
+            {/* Fixed price */}
             <div style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 20, fontWeight: 800 }}>
-                ₹{cycle === 'MONTHLY' ? addon.priceMonthly : addon.priceYearly}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
-                /{cycle === 'MONTHLY' ? 'mo' : 'yr'}
-              </span>
-              {cycle === 'YEARLY' && yearlySavings(addon) > 0 && (
-                <div style={{ fontSize: 10, color: '#10b981', fontWeight: 700, marginTop: 2 }}>
-                  Save ₹{yearlySavings(addon).toLocaleString()}
-                </div>
-              )}
+              <span style={{ fontSize: 22, fontWeight: 800 }}>₹{addon.priceMonthly}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>/ 30 days</span>
             </div>
 
-            {/* CTA */}
             {addon.isActive ? (
               <div style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>
-                ✅ Active till {addon.endDate} ({addon.billingCycle})
+                ✅ Active till {addon.endDate}
               </div>
             ) : addon.canBuy ? (
               <button
@@ -343,8 +299,8 @@ function FeatureAddonShop({ restaurantId, token, user }) {
       </div>
 
       <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
-        * Add-ons renew monthly or yearly. Cancel anytime — active till current period ends.
-        Growth plan users can only purchase Multi-Branch add-on. Enterprise includes all features.
+        * Add-ons 30 days ke liye active rehte hain. Renew manually karo expiry ke baad.
+        Growth plan users sirf Multi-Branch add-on le sakte hain. Enterprise mein sab included hai.
       </div>
     </div>
   )
