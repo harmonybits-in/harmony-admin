@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
+import { useWebSocket } from '../hooks/useWebSocket'
 import { SkeletonTable } from '../components/Skeleton'
 
 const PLATFORM_COLORS = {
@@ -10,6 +11,26 @@ const PLATFORM_COLORS = {
   OWN:      { bg: '#6366f1', text: '#fff' },
   WHATSAPP: { bg: '#22c55e', text: '#fff' },
   PHONE:    { bg: '#64748b', text: '#fff' },
+}
+const PLATFORM_LABELS = {
+  OWN: '🌐 Website',
+  ZOMATO: '🔴 Zomato',
+  SWIGGY: '🟠 Swiggy',
+  WHATSAPP: '💬 WhatsApp',
+  PHONE: '📞 Phone',
+}
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.frequency.value = 880
+    gain.gain.setValueAtTime(0.4, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+    osc.start(); osc.stop(ctx.currentTime + 0.4)
+  } catch {}
 }
 const STATUS_COLORS = {
   PENDING:          { bg: '#fef3c7', text: '#d97706' },
@@ -31,11 +52,12 @@ function fmtDate(d) {
     dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
-function Badge({ label, colors }) {
+function Badge({ label, colors, raw }) {
+  const display = raw ? (PLATFORM_LABELS[label] || label) : label
   return (
     <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
       background: colors?.bg || '#e5e7eb', color: colors?.text || '#374151', letterSpacing: 0.3 }}>
-      {label}
+      {display}
     </span>
   )
 }
@@ -101,7 +123,7 @@ function OrderModal({ order, onClose, onRefresh, toast }) {
           <div>
             <div style={{ fontWeight: 700, fontSize: 16 }}>Order #{order.id}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              <Badge label={order.platform} colors={PLATFORM_COLORS[order.platform]} />
+              <Badge label={order.platform} colors={PLATFORM_COLORS[order.platform]} raw />
               <Badge label={order.status} colors={STATUS_COLORS[order.status]} />
             </div>
           </div>
@@ -220,19 +242,26 @@ export default function OnlineOrders() {
   const rid   = useAuthStore(s => s.restaurantId)
   const toast = useToast()
 
-  const [orders,   setOrders]   = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [platform, setPlatform] = useState('ALL')
-  const [status,   setStatus]   = useState('ALL')
-  const [page,     setPage]     = useState(0)
-  const [total,    setTotal]    = useState(0)
-  const [selected, setSelected] = useState(null)
+  const [orders,    setOrders]    = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [platform,  setPlatform]  = useState('ALL')
+  const [status,    setStatus]    = useState('ALL')
+  const [page,      setPage]      = useState(0)
+  const [total,     setTotal]     = useState(0)
+  const [selected,  setSelected]  = useState(null)
+  const [newAlert,  setNewAlert]  = useState(null)  // { orderId, platform, customerName, total }
   const PAGE_SIZE = 20
+  const platformRef = useRef(platform)
+  const statusRef   = useRef(status)
+  const pageRef     = useRef(page)
+  useEffect(() => { platformRef.current = platform }, [platform])
+  useEffect(() => { statusRef.current   = status   }, [status])
+  useEffect(() => { pageRef.current     = page     }, [page])
 
   const load = useCallback(async (p = 0, plt = platform, st = status) => {
     setLoading(true)
     try {
-      let params = `page=${p}&size=${PAGE_SIZE}&restaurantId=${rid}`
+      let params = `page=${p}&size=${PAGE_SIZE}`
       if (plt !== 'ALL') params += `&platform=${plt}`
       if (st  !== 'ALL') params += `&status=${st}`
       const data = await api.get(`/online-orders?${params}`)
@@ -244,6 +273,21 @@ export default function OnlineOrders() {
   }, [rid, platform, status])
 
   useEffect(() => { load(0, platform, status) }, [rid])
+
+  // ── Live WebSocket: new order notification ──────────────────────
+  useWebSocket(`/topic/online-orders/${rid}`, (msg) => {
+    try {
+      const data = typeof msg.body === 'string' ? JSON.parse(msg.body) : msg.body
+      if (data?.type === 'NEW_ORDER') {
+        playBeep()
+        setNewAlert(data)
+        // Refresh if on page 0 with no active filters
+        if (pageRef.current === 0 && platformRef.current === 'ALL' && statusRef.current === 'ALL') {
+          load(0, 'ALL', 'ALL')
+        }
+      }
+    } catch {}
+  }, [rid])
 
   function applyFilter(plt, st) {
     setPlatform(plt); setStatus(st); setPage(0)
@@ -258,10 +302,28 @@ export default function OnlineOrders() {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* New order live alert */}
+      {newAlert && (
+        <div style={{ background: '#6366f1', color: '#fff', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, animation: 'pulse 1s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 22 }}>🔔</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Naya order aaya! #{newAlert.orderId}</div>
+              <div style={{ fontSize: 12, opacity: 0.85 }}>
+                {PLATFORM_LABELS[newAlert.platform] || newAlert.platform} · {newAlert.customerName} · ₹{Number(newAlert.total || 0).toLocaleString('en-IN')}
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setNewAlert(null)} style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>📱 Online Orders</h1>
         <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
-          Zomato, Swiggy, aur baaki platforms ke orders manage karo
+          Apni website, Zomato, Swiggy aur baaki platforms ke orders — live updates
         </p>
       </div>
 
