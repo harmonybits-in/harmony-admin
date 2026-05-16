@@ -273,8 +273,20 @@ function FeatureAddonShop({ restaurantId, token, user }) {
             </div>
 
             {addon.isActive ? (
-              <div style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>
-                ✅ Active till {addon.endDate}
+              <div>
+                <div style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                  ✅ Active till {addon.endDate}
+                </div>
+                {addon.addonId === 'ADDON_ORDER_WEBSITE' && (
+                  <a
+                    href={`https://www.harmonybits.in/order/${restaurantId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: 11, color: '#6366f1', fontWeight: 600, display: 'block', marginTop: 5, wordBreak: 'break-all' }}
+                  >
+                    🔗 Your order page
+                  </a>
+                )}
               </div>
             ) : addon.canBuy ? (
               <button
