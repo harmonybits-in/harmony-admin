@@ -636,7 +636,7 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
               ))}
             </div>
           </>
-        ) : (
+        ) : tab === 'subscription' ? (
           // ── SUBSCRIPTION TAB ───────────────────────────────────
           <div>
             {/* Current status */}
