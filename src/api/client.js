@@ -192,11 +192,22 @@ export const couponApi = {
 
 // ── Chatbot ───────────────────────────────────────────────────────
 export const chatbotApi = {
-  getConfig:        (rid)              => api.get(`/chatbot/${rid}/config`),
-  updateConfig:     (rid, body)        => api.put(`/chatbot/${rid}/config`, body),
-  getPublicConfig:  (rid)              => api.get(`/chatbot/${rid}/config/public`),
-  sendMessage:      (rid, body)        => api.post(`/chatbot/${rid}/message`, body),
+  getConfig:         (rid)             => api.get(`/chatbot/${rid}/config`),
+  updateConfig:      (rid, body)       => api.put(`/chatbot/${rid}/config`, body),
+  getPublicConfig:   (rid)             => api.get(`/chatbot/${rid}/config/public`),
+  sendMessage:       (rid, body)       => api.post(`/chatbot/${rid}/message`, body),
   getSessions:       (rid, page = 0)   => api.get(`/chatbot/${rid}/sessions?page=${page}`),
   getSessionMessages:(rid, sessionId)  => api.get(`/chatbot/${rid}/sessions/${sessionId}`),
   getStats:          (rid)             => api.get(`/chatbot/${rid}/stats`),
+  // Add-on packs
+  getAddonPacks:     (rid)             => api.get(`/chatbot/${rid}/addon/packs`),
+  createAddonOrder:  (rid, packType)   => api.post(`/chatbot/${rid}/addon/order`, { packType }),
+  verifyAddon:       (body)            => api.post('/chatbot/addon/verify', body),
+  getAddonHistory:   (rid)             => api.get(`/chatbot/${rid}/addon/history`),
+}
+
+// ── Referral ───────────────────────────────────────────────────────
+export const referralApi = {
+  getStats: (rid)  => api.get(`/referral/${rid}/stats`),
+  apply:    (rid, referralCode) => api.post('/referral/apply', { referralCode, newRestaurantId: rid }),
 }

@@ -1,8 +1,19 @@
 // src/pages/Chatbot.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { chatbotApi } from '../api/client'
+import { chatbotApi, referralApi } from '../api/client'
 import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
+
+function loadRazorpay() {
+  return new Promise(resolve => {
+    if (window.Razorpay) { resolve(true); return }
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
 
 // ── Helpers ──────────────────────────────────────────────────────
 function fmtDate(d) {
@@ -791,6 +802,398 @@ function SessionsTab({ rid, toast }) {
   )
 }
 
+// ── Add-on Packs Tab ─────────────────────────────────────────────
+function AddonPacksTab({ rid, toast }) {
+  const { user } = useAuthStore()
+  const [packs, setPacks] = useState([])
+  const [stats, setStats] = useState(null)
+  const [history, setHistory] = useState([])
+  const [paying, setPaying] = useState(null) // packType being paid
+
+  useEffect(() => {
+    chatbotApi.getAddonPacks(rid).then(res => setPacks(Array.isArray(res) ? res : [])).catch(() => {})
+    chatbotApi.getStats(rid).then(res => setStats(res)).catch(() => {})
+    chatbotApi.getAddonHistory(rid).then(res => setHistory(Array.isArray(res) ? res : [])).catch(() => {})
+  }, [rid])
+
+  async function buyPack(pack) {
+    setPaying(pack.packType)
+    try {
+      const loaded = await loadRazorpay()
+      if (!loaded) { toast.error('Razorpay load nahi hua'); setPaying(null); return }
+
+      const order = await chatbotApi.createAddonOrder(rid, pack.packType)
+
+      if (order.mock) {
+        // Mock mode — directly apply (test/local)
+        const verify = await chatbotApi.verifyAddon({
+          restaurantId: rid,
+          razorpayOrderId: order.orderId,
+          razorpayPaymentId: 'pay_MOCK_' + Date.now(),
+          razorpaySignature: 'mock_sig',
+        })
+        toast.success(verify.message || `${pack.credits} messages add ho gaye!`)
+        chatbotApi.getStats(rid).then(setStats).catch(() => {})
+        chatbotApi.getAddonHistory(rid).then(res => setHistory(Array.isArray(res) ? res : [])).catch(() => {})
+        setPaying(null)
+        return
+      }
+
+      const options = {
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        name: 'Harmony Bits Private Limited',
+        description: `Chatbot Add-on: ${pack.label}`,
+        order_id: order.orderId,
+        prefill: { name: user?.name || '', email: user?.email || '' },
+        theme: { color: '#6366f1' },
+        handler: async function(response) {
+          try {
+            const verify = await chatbotApi.verifyAddon({
+              restaurantId: rid,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            })
+            toast.success(verify.message || `${pack.credits} messages add ho gaye!`)
+            chatbotApi.getStats(rid).then(setStats).catch(() => {})
+            chatbotApi.getAddonHistory(rid).then(res => setHistory(Array.isArray(res) ? res : [])).catch(() => {})
+          } catch (e) {
+            toast.error(e.message || 'Payment verify nahi hua')
+          }
+          setPaying(null)
+        },
+        modal: { ondismiss: () => setPaying(null) },
+      }
+      new window.Razorpay(options).open()
+    } catch (e) {
+      toast.error(e.message || 'Payment start nahi hua')
+      setPaying(null)
+    }
+  }
+
+  const sectionStyle = {
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: 12, padding: '20px 24px', marginBottom: 16,
+  }
+
+  return (
+    <div style={{ maxWidth: 680 }}>
+
+      {/* Current Usage Banner */}
+      {stats && (
+        <div style={{ ...sectionStyle, background: 'linear-gradient(135deg, #6366f115, #818cf815)' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📊 This Month's Usage</div>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--accent)' }}>
+                {stats.monthlyUsed}
+                <span style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 400 }}>
+                  {' '}/ {stats.monthlyLimit === 0 ? '∞' : stats.monthlyLimit}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Messages Used</div>
+            </div>
+            {stats.extraCredits > 0 && (
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: '#10b981' }}>+{stats.extraCredits}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Bonus Credits</div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: 26, fontWeight: 800 }}>{stats.totalSessions}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Total Sessions</div>
+            </div>
+          </div>
+          {stats.monthlyLimit > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{
+                height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', borderRadius: 3,
+                  width: `${Math.min(100, (stats.monthlyUsed / stats.monthlyLimit) * 100)}%`,
+                  background: stats.monthlyUsed / stats.monthlyLimit > 0.9 ? '#ef4444' : 'var(--accent)',
+                  transition: 'width .3s',
+                }} />
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                {Math.round((stats.monthlyUsed / stats.monthlyLimit) * 100)}% of monthly limit used
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pack Cards */}
+      <div style={sectionStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>💬 Buy Extra Message Credits</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+          Credits expire the month they're bought — but unused ones roll over. One-time purchase, no subscription.
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+          {packs.map(pack => (
+            <div key={pack.packType} style={{
+              border: pack.popular ? '2px solid var(--accent)' : '1px solid var(--border)',
+              borderRadius: 12, padding: '18px 16px', position: 'relative',
+              background: pack.popular ? 'var(--accent)08' : 'var(--bg-page)',
+              textAlign: 'center',
+            }}>
+              {pack.popular && (
+                <div style={{
+                  position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
+                  background: 'var(--accent)', color: '#fff', fontSize: 10, fontWeight: 700,
+                  padding: '2px 10px', borderRadius: 10,
+                }}>BEST VALUE</div>
+              )}
+              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--accent)' }}>
+                {pack.credits.toLocaleString()}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Messages</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>₹{pack.priceInr}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 14 }}>
+                ₹{(pack.priceInr / pack.credits * 1000).toFixed(1)} per 1000 msgs
+              </div>
+              <button
+                onClick={() => buyPack(pack)}
+                disabled={paying === pack.packType}
+                style={{
+                  width: '100%', padding: '9px 0', borderRadius: 8, border: 'none',
+                  background: paying === pack.packType ? 'var(--border)' : 'var(--accent)',
+                  color: '#fff', fontSize: 13, fontWeight: 700,
+                  cursor: paying === pack.packType ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {paying === pack.packType ? '⏳ Processing…' : 'Buy Now'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Purchase History */}
+      {history.length > 0 && (
+        <div style={sectionStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🧾 Purchase History</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {history.map((h, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 14px', borderRadius: 8, background: 'var(--bg-page)',
+                border: '1px solid var(--border)',
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>+{h.credits} messages</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {h.packType?.replace('_', ' ')} · {new Date(h.createdAt).toLocaleDateString('en-IN')}
+                  </div>
+                </div>
+                <div style={{
+                  padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  background: h.applied ? '#10b98120' : '#f59e0b20',
+                  color: h.applied ? '#10b981' : '#f59e0b',
+                }}>
+                  {h.applied ? 'Applied' : 'Pending'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Referral Tab ─────────────────────────────────────────────────
+function ReferralTab({ rid, toast }) {
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [applying, setApplying] = useState(false)
+  const [refCode, setRefCode] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    referralApi.getStats(rid)
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [rid])
+
+  async function applyCode() {
+    if (!refCode.trim()) return
+    setApplying(true)
+    try {
+      const res = await referralApi.apply(rid, refCode.trim().toUpperCase())
+      if (res.success) {
+        toast.success(res.message || 'Referral applied! 500 credits dono ko mile.')
+        referralApi.getStats(rid).then(setStats).catch(() => {})
+        setRefCode('')
+      } else {
+        toast.error(res.message || 'Invalid code')
+      }
+    } catch (e) {
+      toast.error(e.message || 'Referral apply nahi hua')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  function copyCode() {
+    if (!stats?.referralCode) return
+    navigator.clipboard.writeText(stats.referralCode).then(() => {
+      setCopied(true)
+      toast.success('Referral code copied!')
+      setTimeout(() => setCopied(false), 2500)
+    }).catch(() => toast.error('Copy failed'))
+  }
+
+  function copyLink() {
+    if (!stats?.shareLink) return
+    navigator.clipboard.writeText(stats.shareLink).then(() => {
+      toast.success('Share link copied!')
+    }).catch(() => toast.error('Copy failed'))
+  }
+
+  const sectionStyle = {
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: 12, padding: '20px 24px', marginBottom: 16,
+  }
+
+  if (loading) return (
+    <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
+      Loading…
+    </div>
+  )
+
+  return (
+    <div style={{ maxWidth: 580 }}>
+
+      {/* How it works */}
+      <div style={{ ...sectionStyle, background: 'linear-gradient(135deg, #10b98112, #34d39912)' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>🎁 Refer & Earn</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+          Apna referral code kisi aur restaurant owner ko do. Jab woh sign up karein aur code use karein —
+          <strong style={{ color: 'var(--text)' }}> dono ko 500 chatbot messages (₹200 value)</strong> milenge!
+        </div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
+          {[
+            { step: '1', label: 'Share your code' },
+            { step: '2', label: 'Friend signs up' },
+            { step: '3', label: 'Both get 500 msgs' },
+          ].map(({ step, label }) => (
+            <div key={step} style={{ textAlign: 'center', flex: 1, minWidth: 80 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', background: '#10b981',
+                color: '#fff', fontWeight: 800, fontSize: 14,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px',
+              }}>{step}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Your Code */}
+      <div style={sectionStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Your Referral Code</div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+          <div style={{
+            flex: 1, padding: '12px 16px', borderRadius: 10,
+            background: 'var(--bg-page)', border: '2px dashed var(--accent)',
+            fontFamily: 'monospace', fontSize: 20, fontWeight: 800, letterSpacing: 3,
+            color: 'var(--accent)', textAlign: 'center',
+          }}>
+            {stats?.referralCode || '—'}
+          </div>
+          <button
+            onClick={copyCode}
+            style={{
+              padding: '12px 18px', borderRadius: 10, border: '1px solid var(--border)',
+              background: copied ? '#10b981' : 'var(--bg-page)', color: copied ? '#fff' : 'var(--text)',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: '.2s', whiteSpace: 'nowrap',
+            }}
+          >{copied ? '✅ Copied!' : '📋 Copy'}</button>
+        </div>
+        <button
+          onClick={copyLink}
+          style={{
+            width: '100%', padding: '9px', borderRadius: 9, border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text-muted)', fontSize: 12, fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          🔗 Copy Share Link
+        </button>
+      </div>
+
+      {/* Stats */}
+      {stats && (
+        <div style={sectionStyle}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Your Referral Stats</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              { value: stats.totalReferred, label: 'Restaurants Referred' },
+              { value: stats.totalRewarded, label: 'Rewards Earned' },
+              { value: `+${stats.creditsEarned}`, label: 'Total Credits Earned' },
+            ].map(({ value, label }) => (
+              <div key={label} style={{
+                textAlign: 'center', padding: '14px 8px', borderRadius: 10,
+                background: 'var(--bg-page)', border: '1px solid var(--border)',
+              }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent)' }}>{value}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          {stats.currentExtraCredits > 0 && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 8,
+              background: '#10b98115', border: '1px solid #10b98140',
+              fontSize: 12, color: '#10b981', fontWeight: 600,
+            }}>
+              ✅ Current Balance: <strong>+{stats.currentExtraCredits}</strong> extra chatbot credits active
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Apply a referral code */}
+      <div style={sectionStyle}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Apply a Referral Code</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Kisi aur ne aapko refer kiya? Unka code enter karo — dono ko 500 messages milenge.
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            value={refCode}
+            onChange={e => setRefCode(e.target.value.toUpperCase())}
+            placeholder="e.g. HRM123"
+            style={{
+              flex: 1, padding: '10px 14px', borderRadius: 9, border: '1px solid var(--border)',
+              background: 'var(--bg-page)', color: 'var(--text)', fontSize: 14, fontFamily: 'monospace',
+              fontWeight: 700, letterSpacing: 2,
+            }}
+          />
+          <button
+            onClick={applyCode}
+            disabled={applying || !refCode.trim()}
+            style={{
+              padding: '10px 20px', borderRadius: 9, border: 'none',
+              background: applying || !refCode.trim() ? 'var(--border)' : '#10b981',
+              color: '#fff', fontSize: 13, fontWeight: 700,
+              cursor: applying || !refCode.trim() ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {applying ? '⏳ Applying…' : 'Apply'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════
 export default function Chatbot() {
   const { restaurantId: rid } = useAuthStore()
@@ -801,6 +1204,8 @@ export default function Chatbot() {
     { key: 'config',   label: '⚙️ Config'   },
     { key: 'preview',  label: '🔍 Preview'  },
     { key: 'sessions', label: '📋 Sessions' },
+    { key: 'addons',   label: '💳 Add-on Packs' },
+    { key: 'referral', label: '🎁 Refer & Earn' },
   ]
 
   return (
@@ -817,10 +1222,11 @@ export default function Chatbot() {
       <div style={{
         display: 'flex', gap: 4, marginBottom: '1.5rem',
         borderBottom: '1px solid var(--border)', paddingBottom: 0,
+        overflowX: 'auto',
       }}>
         {tabs.map(({ key, label }) => (
           <button key={key} onClick={() => setActiveTab(key)} style={{
-            padding: '9px 18px', border: 'none', cursor: 'pointer',
+            padding: '9px 16px', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
             fontSize: 13, fontWeight: 600, background: 'transparent',
             color: activeTab === key ? 'var(--accent)' : 'var(--text-muted)',
             borderBottom: activeTab === key ? '2px solid var(--accent)' : '2px solid transparent',
@@ -832,9 +1238,11 @@ export default function Chatbot() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'config'   && <ConfigTab   rid={rid} toast={toast} />}
-      {activeTab === 'preview'  && <PreviewTab  rid={rid} toast={toast} />}
-      {activeTab === 'sessions' && <SessionsTab rid={rid} toast={toast} />}
+      {activeTab === 'config'   && <ConfigTab      rid={rid} toast={toast} />}
+      {activeTab === 'preview'  && <PreviewTab     rid={rid} toast={toast} />}
+      {activeTab === 'sessions' && <SessionsTab    rid={rid} toast={toast} />}
+      {activeTab === 'addons'   && <AddonPacksTab  rid={rid} toast={toast} />}
+      {activeTab === 'referral' && <ReferralTab    rid={rid} toast={toast} />}
     </div>
   )
 }
