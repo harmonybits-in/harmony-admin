@@ -38,6 +38,8 @@ import DeviceManagement         from './pages/DeviceManagement'
 import Referrals                from './pages/Referrals'
 import ServiceAgreement         from './pages/ServiceAgreement'
 import Leave                   from './pages/Leave.jsx'
+import Chatbot                 from './pages/Chatbot'
+import ChatWidget               from './pages/ChatWidget'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -50,6 +52,7 @@ export default function App() {
       <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/chat/:restaurantId" element={<ChatWidget />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index            element={<Dashboard />} />
           <Route path="bills"     element={<Bills />} />
@@ -85,6 +88,7 @@ export default function App() {
           <Route path="referrals"              element={<Referrals />} />
           <Route path="service-agreement"      element={<ServiceAgreement standalone />} />
           <Route path="leave"                  element={<Leave />} />
+          <Route path="chatbot"               element={<Chatbot />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

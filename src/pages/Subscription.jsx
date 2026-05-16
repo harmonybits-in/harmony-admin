@@ -3,21 +3,54 @@ import { useAuthStore } from '../store/authStore'
 
 const PLANS = [
   {
+    id: 'FREE',
+    name: 'Free',
+    billing: 'Forever',
+    price: 0,
+    color: '#16a34a',
+    free: true,
+    features: [
+      '1 Device',
+      '50 bills/month',
+      'Basic POS + KOT',
+      'Menu Management',
+      'Basic Reports',
+    ],
+  },
+  {
     id: 'STARTER_MONTHLY',
     name: 'Starter',
     billing: 'Monthly',
-    price: 999,
+    price: 799,
     color: '#6366f1',
-    features: ['Full POS Billing', '3 Devices', 'Inventory', 'Staff & Payroll'],
+    features: [
+      'Full POS Billing + GST',
+      '1 Device',
+      'Menu + Addons & Variants',
+      'Promotions, Discounts & Coupons',
+      'Table Management (Dine-in)',
+      'Inventory Tracking',
+      'Staff & Payroll',
+      'QR Attendance',
+    ],
   },
   {
     id: 'STARTER_YEARLY',
     name: 'Starter',
     billing: 'Yearly',
-    price: 9599,
+    price: 7599,
     color: '#6366f1',
-    savings: 'Save ₹2,389',
-    features: ['Full POS Billing', '3 Devices', 'Inventory', 'Staff & Payroll'],
+    savings: 'Save ₹1,989',
+    features: [
+      'Full POS Billing + GST',
+      '1 Device',
+      'Menu + Addons & Variants',
+      'Promotions, Discounts & Coupons',
+      'Table Management (Dine-in)',
+      'Inventory Tracking',
+      'Staff & Payroll',
+      'QR Attendance',
+    ],
   },
   {
     id: 'GROWTH_MONTHLY',
@@ -26,7 +59,17 @@ const PLANS = [
     price: 1999,
     color: '#e53e3e',
     popular: true,
-    features: ['Full POS', '10 Devices', 'Rider GPS', 'CRM', 'WhatsApp'],
+    features: [
+      'Everything in Starter',
+      '10 Devices',
+      'Online Orders (Zomato/Swiggy)',
+      'Rider GPS Tracking',
+      'Customer CRM & Loyalty Points',
+      'WhatsApp Integration',
+      'AI Chatbot (Claude/GPT)',
+      'Due Payments Tracking',
+      'Advanced Reports & Analytics',
+    ],
   },
   {
     id: 'GROWTH_YEARLY',
@@ -36,7 +79,17 @@ const PLANS = [
     color: '#e53e3e',
     popular: true,
     savings: 'Save ₹5,989',
-    features: ['Full POS', '10 Devices', 'Rider GPS', 'CRM', 'WhatsApp'],
+    features: [
+      'Everything in Starter',
+      '10 Devices',
+      'Online Orders (Zomato/Swiggy)',
+      'Rider GPS Tracking',
+      'Customer CRM & Loyalty Points',
+      'WhatsApp Integration',
+      'AI Chatbot (Claude/GPT)',
+      'Due Payments Tracking',
+      'Advanced Reports & Analytics',
+    ],
   },
   {
     id: 'ENTERPRISE_MONTHLY',
@@ -44,7 +97,15 @@ const PLANS = [
     billing: 'Monthly',
     price: 3499,
     color: '#d4af37',
-    features: ['Unlimited Devices', 'Franchise Control', 'API Access', 'Dedicated Support'],
+    features: [
+      'Everything in Growth',
+      'Unlimited Devices',
+      'Franchise / Multi-Branch Control',
+      'API Access',
+      'Custom Reports',
+      'Dedicated Support',
+      'Priority WhatsApp Support',
+    ],
   },
   {
     id: 'ENTERPRISE_YEARLY',
@@ -53,7 +114,15 @@ const PLANS = [
     price: 29399,
     color: '#d4af37',
     savings: 'Save ₹12,589',
-    features: ['Unlimited Devices', 'Franchise Control', 'API Access', 'Dedicated Support'],
+    features: [
+      'Everything in Growth',
+      'Unlimited Devices',
+      'Franchise / Multi-Branch Control',
+      'API Access',
+      'Custom Reports',
+      'Dedicated Support',
+      'Priority WhatsApp Support',
+    ],
   },
 ]
 
@@ -78,6 +147,7 @@ export default function Subscription() {
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(false)
   const [activatingTrial, setActivatingTrial] = useState(false)
+  const [activatingFree,  setActivatingFree]  = useState(false)
   const [msg, setMsg] = useState(null) // {type: 'success'|'error', text}
   const [billingCycle, setBillingCycle] = useState('MONTHLY')
 
@@ -95,6 +165,27 @@ export default function Subscription() {
       setSub(null)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function activateFree() {
+    setActivatingFree(true)
+    setMsg(null)
+    try {
+      const res = await fetch(`${API}/subscription/${restaurantId}/free`, {
+        method: 'POST', headers
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMsg({ type: 'success', text: '🎉 Free plan activate ho gaya! Ab unlimited use karo.' })
+        fetchSub()
+      } else {
+        setMsg({ type: 'error', text: data.message || 'Free plan activate nahi hua' })
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Server error. Dobara try karo.' })
+    } finally {
+      setActivatingFree(false)
     }
   }
 
@@ -195,7 +286,7 @@ export default function Subscription() {
     }
   }
 
-  const filteredPlans = PLANS.filter(p => p.id.endsWith(billingCycle))
+  const filteredPlans = PLANS.filter(p => p.free || p.id.endsWith(billingCycle))
 
   const statusColor = sub?.status === 'ACTIVE' ? '#16a34a'
     : sub?.status === 'EXPIRING_SOON' ? '#f59e0b'
@@ -259,10 +350,16 @@ export default function Subscription() {
                 <div style={{ fontSize:15, fontWeight:600, color:'var(--text)', marginBottom:4 }}>Koi active subscription nahi</div>
                 <div style={{ fontSize:13, color:'var(--text-muted)' }}>Niche se plan choose karo ya free trial shuru karo</div>
               </div>
-              <button onClick={activateTrial} disabled={activatingTrial}
-                style={{ padding:'10px 20px', borderRadius:9, border:'none', background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', fontSize:13, fontWeight:700, cursor:activatingTrial?'not-allowed':'pointer', opacity:activatingTrial?.6:1 }}>
-                {activatingTrial ? '⏳ Activating...' : '🆓 14-Day Free Trial'}
-              </button>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <button onClick={activateFree} disabled={activatingFree}
+                  style={{ padding:'10px 20px', borderRadius:9, border:'none', background:'linear-gradient(135deg,#16a34a,#15803d)', color:'#fff', fontSize:13, fontWeight:700, cursor:activatingFree?'not-allowed':'pointer', opacity:activatingFree?.6:1 }}>
+                  {activatingFree ? '⏳ Activating...' : '🆓 Free Forever'}
+                </button>
+                <button onClick={activateTrial} disabled={activatingTrial}
+                  style={{ padding:'10px 20px', borderRadius:9, border:'none', background:'linear-gradient(135deg,#10b981,#059669)', color:'#fff', fontSize:13, fontWeight:700, cursor:activatingTrial?'not-allowed':'pointer', opacity:activatingTrial?.6:1 }}>
+                  {activatingTrial ? '⏳ Activating...' : '✨ 30-Day Free Trial'}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -297,11 +394,20 @@ export default function Subscription() {
           const isActive = sub?.active && sub?.planId === plan.id
           return (
             <div key={plan.id} style={{
-              background: plan.popular ? `linear-gradient(160deg,rgba(229,62,62,.08),var(--bg-card))` : 'var(--bg-card)',
-              border: `1.5px solid ${isActive ? '#10b981' : plan.popular ? plan.color+'44' : 'var(--border)'}`,
+              background: plan.free
+                ? 'linear-gradient(160deg,rgba(22,163,74,.06),var(--bg-card))'
+                : plan.popular
+                  ? 'linear-gradient(160deg,rgba(229,62,62,.08),var(--bg-card))'
+                  : 'var(--bg-card)',
+              border: `1.5px solid ${isActive ? '#10b981' : plan.free ? '#16a34a55' : plan.popular ? plan.color+'44' : 'var(--border)'}`,
               borderRadius:14, padding:'24px', position:'relative',
-              boxShadow: plan.popular ? `0 4px 24px ${plan.color}15` : ''
+              boxShadow: plan.popular ? `0 4px 24px ${plan.color}15` : plan.free ? '0 4px 16px rgba(22,163,74,.1)' : ''
             }}>
+              {plan.free && !isActive && (
+                <div style={{ position:'absolute', top:-10, left:'50%', transform:'translateX(-50%)', padding:'2px 14px', borderRadius:20, background:'#16a34a', color:'#fff', fontSize:10, fontWeight:700, whiteSpace:'nowrap' }}>
+                  🆓 Forever Free
+                </div>
+              )}
               {plan.popular && !isActive && (
                 <div style={{ position:'absolute', top:-10, left:'50%', transform:'translateX(-50%)', padding:'2px 14px', borderRadius:20, background:'#e53e3e', color:'#fff', fontSize:10, fontWeight:700, whiteSpace:'nowrap' }}>
                   🔥 Most Popular
@@ -326,15 +432,24 @@ export default function Subscription() {
               </div>
 
               <div style={{ marginBottom:20 }}>
-                <span style={{ fontSize:13, color:'var(--text-muted)' }}>₹</span>
-                <span style={{ fontSize:36, fontWeight:800, color:isActive?'#10b981':plan.color, fontFamily:'Lora, serif' }}>
-                  {billingCycle === 'YEARLY' ? Math.round(plan.price/12).toLocaleString('en-IN') : plan.price.toLocaleString('en-IN')}
-                </span>
-                <span style={{ fontSize:12, color:'var(--text-muted)' }}>/mo</span>
-                {billingCycle === 'YEARLY' && (
-                  <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
-                    ₹{plan.price.toLocaleString('en-IN')} billed yearly
-                  </div>
+                {plan.free ? (
+                  <>
+                    <span style={{ fontSize:38, fontWeight:800, color:'#16a34a', fontFamily:'Lora, serif' }}>FREE</span>
+                    <div style={{ fontSize:11, color:'#16a34a', marginTop:4, fontWeight:600 }}>Always free · No credit card</div>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize:13, color:'var(--text-muted)' }}>₹</span>
+                    <span style={{ fontSize:36, fontWeight:800, color:isActive?'#10b981':plan.color, fontFamily:'Lora, serif' }}>
+                      {billingCycle === 'YEARLY' ? Math.round(plan.price/12).toLocaleString('en-IN') : plan.price.toLocaleString('en-IN')}
+                    </span>
+                    <span style={{ fontSize:12, color:'var(--text-muted)' }}>/mo</span>
+                    {billingCycle === 'YEARLY' && (
+                      <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
+                        ₹{plan.price.toLocaleString('en-IN')} billed yearly
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -350,6 +465,15 @@ export default function Subscription() {
                 <div style={{ textAlign:'center', padding:'10px', borderRadius:9, background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.25)', color:'#10b981', fontSize:13, fontWeight:700 }}>
                   ✅ Active Plan
                 </div>
+              ) : plan.free ? (
+                <button onClick={activateFree} disabled={activatingFree || !!sub?.active}
+                  style={{ width:'100%', padding:'11px', borderRadius:9, border:'none',
+                    background: (activatingFree || sub?.active) ? 'var(--border)' : `linear-gradient(135deg,${plan.color},#15803d)`,
+                    color:'#fff', fontSize:13, fontWeight:700,
+                    cursor:(activatingFree || sub?.active)?'not-allowed':'pointer',
+                  }}>
+                  {activatingFree ? '⏳ Activating...' : sub?.active ? 'Already Active' : '🆓 Start Free Forever'}
+                </button>
               ) : (
                 <button onClick={() => startPayment(plan)} disabled={paying}
                   style={{ width:'100%', padding:'11px', borderRadius:9, border:'none',

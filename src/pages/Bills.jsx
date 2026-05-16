@@ -129,6 +129,19 @@ function BillDetailModal({ billId, restaurant, onClose }) {
   const toast = useToast()
   const [bill,    setBill]    = useState(null)
   const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+
+  async function handleSendWhatsApp() {
+    setSending(true)
+    try {
+      await billApi.sendWhatsApp(billId)
+      toast.success('Bill WhatsApp pe bhej diya! ✅')
+    } catch (e) {
+      toast.error(e.message || 'WhatsApp send nahi hua')
+    } finally {
+      setSending(false)
+    }
+  }
 
   useEffect(() => {
     billApi.getById(billId)
@@ -189,6 +202,13 @@ function BillDetailModal({ billId, restaurant, onClose }) {
               padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
               background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
             }}>🖨️ Print</button>
+            {bill.customerPhone && (
+              <button onClick={handleSendWhatsApp} disabled={sending} style={{
+                padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: sending ? '#ccc' : '#25d366', color: '#fff',
+                border: 'none', cursor: sending ? 'not-allowed' : 'pointer',
+              }}>{sending ? '⏳ Sending...' : '📲 WhatsApp'}</button>
+            )}
             <button onClick={onClose} style={{ background: 'none', border: 'none',
               fontSize: 24, cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1,
               padding: '0 4px' }}>×</button>

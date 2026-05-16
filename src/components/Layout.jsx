@@ -2,7 +2,7 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useCallback, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { leaveApi } from '../api/client'
+import { leaveApi, chatbotApi } from '../api/client'
 
 // ── Full-page routes (no padding wrapper) ────────────────────────
 const FULL_PAGE_PATHS = [
@@ -42,6 +42,7 @@ const NAV_GROUPS = [
       { to: '/customers', icon: '👥', label: 'Customers'     },
       { to: '/loyalty',   icon: '⭐', label: 'Loyalty Points'},
       { to: '/feedback',  icon: '💬', label: 'Feedback'      },
+      { to: '/chatbot',   icon: '🤖', label: 'Chatbot', badge: 'chatbot' },
     ],
   },
   {
@@ -334,7 +335,7 @@ function InventorySidebar() {
 }
 
 // ── Grouped Nav (non-inventory) ───────────────────────────────────
-function GroupedNav({ location, leavePendingCount }) {
+function GroupedNav({ location, leavePendingCount, chatbotTodayCount }) {
   const [openGroups, setOpenGroups] = useState(() => {
     const open = new Set()
     NAV_GROUPS.forEach(g => {
@@ -419,6 +420,14 @@ function GroupedNav({ location, leavePendingCount }) {
                     flexShrink: 0,
                   }}>{leavePendingCount > 9 ? '9+' : leavePendingCount}</span>
                 )}
+                {badge === 'chatbot' && chatbotTodayCount > 0 && (
+                  <span style={{
+                    background: '#3b82f6', color: '#fff', borderRadius: '50%',
+                    width: 16, height: 16, fontSize: 9, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>{chatbotTodayCount > 9 ? '9+' : chatbotTodayCount}</span>
+                )}
               </NavLink>
             ))}
           </div>
@@ -445,6 +454,7 @@ export default function Layout() {
   const navigate  = useNavigate()
   const location  = useLocation()
   const [leavePendingCount, setLeavePendingCount] = useState(0)
+  const [chatbotTodayCount, setChatbotTodayCount] = useState(0)
 
   const isInventory = location.pathname.startsWith('/inventory')
 
@@ -453,6 +463,9 @@ export default function Layout() {
     leaveApi.getPendingCount(restaurantId)
       .then(res => setLeavePendingCount(res?.count || res || 0))
       .catch(() => setLeavePendingCount(0))
+    chatbotApi.getStats(restaurantId)
+      .then(res => setChatbotTodayCount(res?.todaySessions || 0))
+      .catch(() => setChatbotTodayCount(0))
   }, [restaurantId, location.pathname])
 
   function handleLogout() {
@@ -481,7 +494,7 @@ export default function Layout() {
         <nav style={{ flex: 1, padding: '0.25rem 0' }}>
 
           {/* Grouped nav */}
-          <GroupedNav location={location} leavePendingCount={leavePendingCount} />
+          <GroupedNav location={location} leavePendingCount={leavePendingCount} chatbotTodayCount={chatbotTodayCount} />
 
           {/* ── Inventory parent link + expandable sidebar ── */}
           <div>

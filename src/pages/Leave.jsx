@@ -308,7 +308,7 @@ function ActionModal({ action, request, onClose, onDone, toast }) {
     <Modal onClose={onClose}>
       <ModalHeader title={title} onClose={onClose} />
       <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, background: 'var(--bg-page)', border: '1px solid var(--border)', fontSize: 13 }}>
-        <strong>{request.staffName}</strong> — <TypeBadge type={request.leaveType} /> {' '}
+        <strong>{request.staffName}</strong> — <TypeBadge type={request.type} /> {' '}
         {fmtDate(request.startDate)} → {fmtDate(request.endDate)}
         {' '}({calcDays(request.startDate, request.endDate)} days)
       </div>
@@ -505,7 +505,7 @@ function RequestsTab({ rid, user, policy, toast, pendingCount, setPendingCount }
                       )}
                     </td>
                     <td style={{ padding: '12px 14px' }}>
-                      <TypeBadge type={req.leaveType} />
+                      <TypeBadge type={req.type} />
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 12 }}>
                       <div>{fmtDate(req.startDate)}</div>
@@ -603,22 +603,19 @@ function CalendarTab({ rid, toast }) {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1) // 1-12
-  const [calData, setCalData] = useState([])
+  const [calMap, setCalMap] = useState({})      // { "2026-05-01": [{staffId,staffName,type,leaveId},...] }
+  const [maxDaily, setMaxDaily] = useState(2)
   const [loading, setLoading] = useState(true)
-  const [policy, setPolicy] = useState(null)
-  const [tooltip, setTooltip] = useState(null) // { day, x, y }
+  const [tooltip, setTooltip] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [cal, pol] = await Promise.all([
-        leaveApi.getCalendar(rid, year, month),
-        leaveApi.getPolicy(rid).catch(() => null),
-      ])
-      setCalData(Array.isArray(cal) ? cal : (cal?.days || []))
-      setPolicy(pol)
+      const cal = await leaveApi.getCalendar(rid, year, month)
+      setCalMap(cal?.calendar || {})
+      setMaxDaily(cal?.maxDailyLeaves ?? 2)
     } catch {
-      setCalData([])
+      setCalMap({})
     } finally {
       setLoading(false)
     }
@@ -638,25 +635,17 @@ function CalendarTab({ rid, toast }) {
   // Build calendar grid
   const firstDay = new Date(year, month - 1, 1).getDay() // 0=Sun
   const daysInMonth = new Date(year, month, 0).getDate()
-  const maxDaily = policy?.maxStaffOnLeavePerDay || 3
-
-  // Map calData by date string
-  const calMap = {}
-  calData.forEach(d => {
-    const key = d.date || d.day
-    if (key) calMap[key] = d
-  })
 
   function padDate(y, m, d) {
     return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
   }
 
-  // Build grid cells
+  // Build grid cells — calMap keys are "YYYY-MM-DD", values are [{staffId,staffName,type,leaveId}]
   const cells = []
   for (let i = 0; i < firstDay; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) {
     const key = padDate(year, month, d)
-    cells.push({ day: d, key, data: calMap[key] || null })
+    cells.push({ day: d, key, staffOnLeave: calMap[key] || [] })
   }
   // Pad to complete last row
   while (cells.length % 7 !== 0) cells.push(null)
@@ -698,7 +687,7 @@ function CalendarTab({ rid, toast }) {
               if (!cell) {
                 return <div key={`empty-${idx}`} style={{ borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)', minHeight: 80, background: 'var(--bg-page)' }} />
               }
-              const staffOnLeave = cell.data?.staffOnLeave || []
+              const staffOnLeave = cell.staffOnLeave
               const count = staffOnLeave.length
               const isAtLimit = count >= maxDaily
               const isNearLimit = count === maxDaily - 1
@@ -722,7 +711,7 @@ function CalendarTab({ rid, toast }) {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {staffOnLeave.slice(0, 3).map((s, si) => {
-                      const tc = LEAVE_TYPE_COLOR[s.leaveType] || { bg: '#88888820', color: '#888' }
+                      const tc = LEAVE_TYPE_COLOR[s.type] || { bg: '#88888820', color: '#888' }
                       return (
                         <span key={si} style={{
                           fontSize: 9, padding: '1px 5px', borderRadius: 10, fontWeight: 700,
@@ -750,12 +739,12 @@ function CalendarTab({ rid, toast }) {
                     >
                       <div style={{ fontWeight: 700, marginBottom: 6 }}>{fmtDate(cell.key)}</div>
                       {staffOnLeave.map((s, si) => {
-                        const tc = LEAVE_TYPE_COLOR[s.leaveType] || { color: '#888' }
+                        const tc = LEAVE_TYPE_COLOR[s.type] || { color: '#888' }
                         return (
                           <div key={si} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <span style={{ width: 7, height: 7, borderRadius: '50%', background: tc.color, flexShrink: 0 }} />
                             <span style={{ flex: 1 }}>{s.staffName}</span>
-                            <TypeBadge type={s.leaveType} />
+                            <TypeBadge type={s.type} />
                           </div>
                         )
                       })}
@@ -882,16 +871,16 @@ function BalanceTab({ rid, toast }) {
                     {b.staffRole && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{b.staffRole}</div>}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
-                    <ProgressCell used={b.sickUsed || 0} quota={b.sickQuota} />
+                    <ProgressCell used={b.sick?.used || 0} quota={b.sick?.quota} />
                   </td>
                   <td style={{ padding: '12px 14px' }}>
-                    <ProgressCell used={b.casualUsed || 0} quota={b.casualQuota} />
+                    <ProgressCell used={b.casual?.used || 0} quota={b.casual?.quota} />
                   </td>
                   <td style={{ padding: '12px 14px' }}>
-                    <ProgressCell used={b.emergencyUsed || 0} quota={b.emergencyQuota} />
+                    <ProgressCell used={b.emergency?.used || 0} quota={b.emergency?.quota} />
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                    {b.unpaidUsed || 0} days
+                    {b.unpaid?.used || 0} days
                   </td>
                 </tr>
               ))}
@@ -906,7 +895,7 @@ function BalanceTab({ rid, toast }) {
 // ── Tab: Policy ──────────────────────────────────────────────────
 function PolicyTab({ rid, policy, setPolicy, user, toast }) {
   const [form, setForm] = useState({
-    maxStaffOnLeavePerDay: 2,
+    maxDailyLeaves: 2,
     sickLeaveQuota: 2,
     casualLeaveQuota: 2,
     emergencyLeaveQuota: 1,
@@ -916,10 +905,10 @@ function PolicyTab({ rid, policy, setPolicy, user, toast }) {
   useEffect(() => {
     if (policy) {
       setForm({
-        maxStaffOnLeavePerDay: policy.maxStaffOnLeavePerDay ?? 2,
-        sickLeaveQuota:        policy.sickLeaveQuota        ?? 2,
-        casualLeaveQuota:      policy.casualLeaveQuota      ?? 2,
-        emergencyLeaveQuota:   policy.emergencyLeaveQuota   ?? 1,
+        maxDailyLeaves:      policy.maxDailyLeaves      ?? 2,
+        sickLeaveQuota:      policy.sickLeaveQuota      ?? 2,
+        casualLeaveQuota:    policy.casualLeaveQuota    ?? 2,
+        emergencyLeaveQuota: policy.emergencyLeaveQuota ?? 1,
       })
     }
   }, [policy])
@@ -963,8 +952,8 @@ function PolicyTab({ rid, policy, setPolicy, user, toast }) {
               Max Staff on Leave per Day
             </label>
             <input
-              type="number" min={1} max={50} value={form.maxStaffOnLeavePerDay}
-              onChange={upd('maxStaffOnLeavePerDay')} disabled={!canManage}
+              type="number" min={1} max={50} value={form.maxDailyLeaves}
+              onChange={upd('maxDailyLeaves')} disabled={!canManage}
               style={fieldStyle}
             />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>

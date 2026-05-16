@@ -57,10 +57,11 @@ export const authApi = {
 
 // ── Bills ────────────────────────────────────────────────────────
 export const billApi = {
-  getAll:  (rid, params = '') => api.get(`/bills?restaurantId=${rid}&${params}`),
-  getById: (id) => api.get(`/bills/${id}`),
-  today:   (rid) => api.get(`/bills/today?restaurantId=${rid}`),
-  summary: (rid, from, to) => api.get(`/bills/summary?restaurantId=${rid}&from=${from}&to=${to}`),
+  getAll:      (rid, params = '') => api.get(`/bills?restaurantId=${rid}&${params}`),
+  getById:     (id) => api.get(`/bills/${id}`),
+  today:       (rid) => api.get(`/bills/today?restaurantId=${rid}`),
+  summary:     (rid, from, to) => api.get(`/bills/summary?restaurantId=${rid}&from=${from}&to=${to}`),
+  sendWhatsApp:(id) => api.post(`/bills/${id}/whatsapp`),
 }
 
 // ── Staff ────────────────────────────────────────────────────────
@@ -187,4 +188,15 @@ export const couponApi = {
   update:       (id, body)               => api.put(`/coupons/${id}`, body),
   toggleActive: (id, active)             => api.patch(`/coupons/${id}/active?active=${active}`),
   delete:       (id)                     => api.delete(`/coupons/${id}`),
+}
+
+// ── Chatbot ───────────────────────────────────────────────────────
+export const chatbotApi = {
+  getConfig:        (rid)              => api.get(`/chatbot/${rid}/config`),
+  updateConfig:     (rid, body)        => api.put(`/chatbot/${rid}/config`, body),
+  getPublicConfig:  (rid)              => api.get(`/chatbot/${rid}/config/public`),
+  sendMessage:      (rid, body)        => api.post(`/chatbot/${rid}/message`, body),
+  getSessions:       (rid, page = 0)   => api.get(`/chatbot/${rid}/sessions?page=${page}`),
+  getSessionMessages:(rid, sessionId)  => api.get(`/chatbot/${rid}/sessions/${sessionId}`),
+  getStats:          (rid)             => api.get(`/chatbot/${rid}/stats`),
 }

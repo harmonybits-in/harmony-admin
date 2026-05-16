@@ -1,11 +1,13 @@
 // src/pages/Dashboard.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid,
 } from 'recharts'
 import MetricCard from '../components/MetricCard'
 import { useDashboard } from '../hooks/useDashboard'
+import { chatbotApi } from '../api/client'
+import { useAuthStore } from '../store/authStore'
 
 const PERIODS = ['today', 'week', 'month']
 const PIE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444']
@@ -50,6 +52,14 @@ function Skeleton({ h = 200 }) {
 export default function Dashboard() {
   const [period, setPeriod] = useState('today')
   const { data, loading, reload } = useDashboard(period)
+  const { restaurantId } = useAuthStore()
+  const [chatStats, setChatStats] = useState(null)
+
+  useEffect(() => {
+    if (!restaurantId) return
+    chatbotApi.getStats(restaurantId).then(setChatStats).catch(() => {})
+
+  }, [restaurantId])
 
   const today      = data?.todayData   || {}
   const salesByType = data?.salesByType || {}
@@ -134,6 +144,34 @@ export default function Dashboard() {
           loading={loading}
         />
       </div>
+
+      {/* Chatbot stats */}
+      {chatStats && (chatStats.todaySessions > 0 || chatStats.totalSessions > 0) && (
+        <div style={{
+          display: 'flex', gap: 12, marginBottom: '1.5rem',
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 12, padding: '14px 20px', alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 22 }}>🤖</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Chatbot Activity</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              <span style={{ color: '#3b82f6', fontWeight: 700 }}>{chatStats.todaySessions}</span> new conversations today
+              &nbsp;·&nbsp;
+              <span style={{ fontWeight: 600 }}>{chatStats.totalSessions}</span> total sessions
+              &nbsp;·&nbsp;
+              <span style={{ fontWeight: 600 }}>{chatStats.totalMessages}</span> total messages
+            </div>
+          </div>
+          {chatStats.todaySessions > 0 && (
+            <a href="/chatbot" style={{
+              padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: '#3b82f615', color: '#3b82f6', border: '1px solid #3b82f630',
+              textDecoration: 'none',
+            }}>View Chats →</a>
+          )}
+        </div>
+      )}
 
       {/* Charts row 1 */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }}>
