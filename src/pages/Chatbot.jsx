@@ -333,9 +333,9 @@ function ConfigTab({ rid, toast }) {
         </div>
 
         <div>
-          <label style={labelStyle}>📱 WhatsApp Alert Number</label>
+          <label style={labelStyle}>📱 WhatsApp Alert Number <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>(optional)</span></label>
           <input
-            type="tel" value={config.alertPhone} onChange={upd('alertPhone')}
+            type="text" value={config.alertPhone} onChange={upd('alertPhone')}
             placeholder="e.g. 9876543210"
             style={inputStyle}
           />
@@ -345,9 +345,9 @@ function ConfigTab({ rid, toast }) {
         </div>
 
         <div>
-          <label style={labelStyle}>⭐ Google Review Link</label>
+          <label style={labelStyle}>⭐ Google Review Link <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}>(optional)</span></label>
           <input
-            type="url" value={config.googleReviewLink} onChange={upd('googleReviewLink')}
+            type="text" value={config.googleReviewLink} onChange={upd('googleReviewLink')}
             placeholder="https://g.page/r/YOUR_PLACE_ID/review"
             style={inputStyle}
           />
