@@ -856,13 +856,42 @@ function AddonPacksTab({ rid, toast }) {
       {/* Current Usage Banner */}
       {stats && (
         <div style={{ ...sectionStyle, background: 'linear-gradient(135deg, #6366f115, #818cf815)' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📊 This Month's Usage</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>📊 This Month's Usage</div>
+            {stats.planName && (
+              <div style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: 'var(--accent)20', color: 'var(--accent)', fontWeight: 700 }}>
+                {stats.planName} · {stats.basePlanLimit?.toLocaleString()} msgs/month
+              </div>
+            )}
+          </div>
+
+          {/* Plan limits reference */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginBottom: 14 }}>
+            {[
+              { plan: 'STARTER',    msgs: 500,   price: '₹999' },
+              { plan: 'GROWTH',     msgs: 3000,  price: '₹1,999' },
+              { plan: 'ENTERPRISE', msgs: 10000, price: '₹3,499' },
+              { plan: 'Extra Pack', msgs: null,  price: '₹99–399' },
+            ].map(({ plan, msgs, price }) => (
+              <div key={plan} style={{
+                padding: '8px 10px', borderRadius: 8, textAlign: 'center',
+                background: stats.planName === plan ? 'var(--accent)20' : 'var(--bg-page)',
+                border: `1px solid ${stats.planName === plan ? 'var(--accent)' : 'var(--border)'}`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: stats.planName === plan ? 'var(--accent)' : 'var(--text-muted)' }}>{plan}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, marginTop: 2 }}>{msgs ? msgs.toLocaleString() : '–'}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{msgs ? 'msgs' : 'buy extra'}</div>
+                <div style={{ fontSize: 10, color: '#10b981', fontWeight: 600, marginTop: 2 }}>{price}/mo</div>
+              </div>
+            ))}
+          </div>
+
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--accent)' }}>
                 {stats.monthlyUsed}
                 <span style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 400 }}>
-                  {' '}/ {stats.monthlyLimit === 0 ? '∞' : stats.monthlyLimit}
+                  {' '}/ {stats.monthlyLimit?.toLocaleString()}
                 </span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Messages Used</div>
@@ -878,11 +907,10 @@ function AddonPacksTab({ rid, toast }) {
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Total Sessions</div>
             </div>
           </div>
+
           {stats.monthlyLimit > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div style={{
-                height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden',
-              }}>
+              <div style={{ height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', borderRadius: 3,
                   width: `${Math.min(100, (stats.monthlyUsed / stats.monthlyLimit) * 100)}%`,
