@@ -89,6 +89,12 @@ const NAV_GROUPS = [
     ],
   },
   {
+    key: 'finance', label: 'Finance',
+    items: [
+      { to: '/expenses', icon: '💸', label: 'Expenses' },
+    ],
+  },
+  {
     key: 'analytics', label: 'Analytics',
     items: [
       { to: '/reports',     icon: '📊', label: 'Reports'     },

@@ -138,6 +138,28 @@ export const subscriptionApi = {
   validate:     (rid)        => api.get(`/subscription/${rid}/validate`),
 }
 
+// ── Expenses ──────────────────────────────────────────────────────
+export const expenseApi = {
+  getAll:     (rid, { from, to, category, page = 0, size = 20 } = {}) => {
+    let url = `/expenses?page=${page}&size=${size}`
+    if (from)     url += `&from=${from}`
+    if (to)       url += `&to=${to}`
+    if (category) url += `&category=${category}`
+    return api.get(url)
+  },
+  getSummary: (rid, { from, to } = {}) => {
+    let url = `/expenses/summary`
+    const params = []
+    if (from) params.push(`from=${from}`)
+    if (to)   params.push(`to=${to}`)
+    if (params.length) url += '?' + params.join('&')
+    return api.get(url)
+  },
+  create: (rid, body) => api.post('/expenses', body),
+  update: (rid, id, body) => api.put(`/expenses/${id}`, body),
+  delete: (rid, id) => api.delete(`/expenses/${id}`),
+}
+
 // ── Audit Log ─────────────────────────────────────────────────────
 export const auditApi = {
   getLogs: (rid, { action, entityType, page = 0 } = {}) => {

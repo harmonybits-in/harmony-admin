@@ -45,6 +45,7 @@ import GstReports           from './pages/GstReports'
 import KitchenDisplay       from './pages/KitchenDisplay'
 import DirectAggregator     from './pages/DirectAggregator'
 import AuditLog             from './pages/AuditLog'
+import Expenses             from './pages/Expenses'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -99,6 +100,7 @@ export default function App() {
           <Route path="kitchen-display"    element={<KitchenDisplay />} />
           <Route path="direct-aggregator"  element={<DirectAggregator />} />
           <Route path="audit-log"          element={<AuditLog />} />
+          <Route path="expenses"           element={<Expenses />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
