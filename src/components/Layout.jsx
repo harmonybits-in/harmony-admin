@@ -4,6 +4,18 @@ import { useState, useCallback, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { leaveApi, chatbotApi } from '../api/client'
 
+function useOnlineStatus() {
+  const [online, setOnline] = useState(navigator.onLine)
+  useEffect(() => {
+    const on  = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online',  on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
+  return online
+}
+
 // ── Full-page routes (no padding wrapper) ────────────────────────
 const FULL_PAGE_PATHS = [
   '/inventory/masters/raw',
@@ -79,13 +91,17 @@ const NAV_GROUPS = [
   {
     key: 'analytics', label: 'Analytics',
     items: [
-      { to: '/reports', icon: '📊', label: 'Reports' },
+      { to: '/reports',     icon: '📊', label: 'Reports'     },
+      { to: '/gst-reports', icon: '🧾', label: 'GST Reports' },
     ],
   },
   {
     key: 'tools', label: 'Tools',
     items: [
-      { to: '/whatsapp', icon: '💬', label: 'WhatsApp'  },
+      { to: '/whatsapp',          icon: '💬',   label: 'WhatsApp'              },
+      { to: '/aggregator',        icon: '🍽️',  label: 'Zomato / Swiggy Sync' },
+      { to: '/direct-aggregator', icon: '⚡',   label: 'Direct Aggregator'    },
+      { to: '/kitchen-display',   icon: '👨‍🍳', label: 'Web Kitchen Display'  },
     ],
   },
   {
@@ -98,6 +114,7 @@ const NAV_GROUPS = [
       { to: '/device-management', icon: '📱', label: 'Device Management' },
       { to: '/referrals',         icon: '🎁', label: 'Referrals'         },
       { to: '/service-agreement', icon: '📄', label: 'Service Agreement' },
+      { to: '/audit-log',         icon: '🔍', label: 'Audit Log'         },
     ],
   },
 ]
@@ -438,11 +455,27 @@ function GroupedNav({ location, leavePendingCount, chatbotTodayCount }) {
 }
 
 // ── MainContent — padding zero for full-page routes ───────────────
+function OfflineBanner() {
+  const online = useOnlineStatus()
+  if (online) return null
+  return (
+    <div style={{
+      background: '#1e293b', color: '#f1f5f9',
+      padding: '8px 20px', fontSize: 13, fontWeight: 600,
+      display: 'flex', alignItems: 'center', gap: 10,
+      position: 'sticky', top: 0, zIndex: 100,
+    }}>
+      <span style={{ fontSize: 16 }}>📵</span>
+      Internet connection nahi hai — cached data dikh raha hai. Changes sync honge jab connection wapas aayega.
+    </div>
+  )
+}
+
 function MainContent() {
   const location = useLocation()
   const isFullPage = FULL_PAGE_PATHS.some(p => location.pathname.startsWith(p))
   return (
-    <div style={{ padding: isFullPage ? '0' : '1.5rem 2rem', minHeight: '100%' }}>
+    <div style={{ padding: isFullPage ? '0' : '1.5rem 2rem', minHeight: '100%', flex: 1 }}>
       <Outlet />
     </div>
   )
@@ -548,7 +581,8 @@ export default function Layout() {
       </aside>
 
       {/* ── Main content ── */}
-      <main style={{ flex: 1, overflow: 'auto', height: '100vh' }}>
+      <main style={{ flex: 1, overflow: 'auto', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <OfflineBanner />
         <MainContent />
       </main>
     </div>

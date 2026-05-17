@@ -138,6 +138,16 @@ export const subscriptionApi = {
   validate:     (rid)        => api.get(`/subscription/${rid}/validate`),
 }
 
+// ── Audit Log ─────────────────────────────────────────────────────
+export const auditApi = {
+  getLogs: (rid, { action, entityType, page = 0 } = {}) => {
+    let url = `/audit/${rid}?page=${page}`
+    if (action)     url += `&action=${action}`
+    if (entityType) url += `&entityType=${entityType}`
+    return api.get(url)
+  },
+}
+
 // ── Admin (SUPER_ADMIN) ───────────────────────────────────────────
 export const adminApi = {
   getDashboard:    ()             => api.get('/admin/dashboard'),
@@ -220,4 +230,29 @@ export const featureAddonApi = {
   getActive:   (rid)                        => api.get(`/feature-addons/${rid}/active`),
   createOrder: (rid, addonId, billingCycle) => api.post(`/feature-addons/${rid}/order`, { addonId, billingCycle }),
   verify:      (body)                       => api.post('/feature-addons/verify', body),
+}
+
+// ── Aggregator (Zomato/Swiggy via UrbanPiper) ─────────────────────
+export const aggregatorApi = {
+  getConfig:  (rid)        => api.get(`/aggregator/${rid}/config`),
+  saveConfig: (rid, body)  => api.put(`/aggregator/${rid}/config`, body),
+}
+
+// ── GST Reports ────────────────────────────────────────────────────
+export const gstApi = {
+  monthly: (rid, year, month) => api.get(`/gst/${rid}/monthly?year=${year}&month=${month}`),
+  range:   (rid, from, to)   => api.get(`/gst/${rid}/range?from=${from}&to=${to}`),
+}
+
+// ── Kitchen Display ────────────────────────────────────────────────
+export const kitchenApi = {
+  getOrders:    (rid)                  => api.get(`/kitchen?restaurantId=${rid}`),
+  accept:       (orderId, chefName)    => api.post(`/kitchen/accept?orderId=${orderId}&chefName=${encodeURIComponent(chefName)}`),
+  updateStatus: (orderId, status)      => api.post(`/kitchen/status?orderId=${orderId}&status=${status}`),
+}
+
+// ── Direct Aggregator (Zomato/Swiggy direct) ──────────────────────
+export const directAggregatorApi = {
+  getConfig:  (rid)       => api.get(`/direct-aggregator/${rid}/config`),
+  saveConfig: (rid, body) => api.put(`/direct-aggregator/${rid}/config`, body),
 }

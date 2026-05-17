@@ -40,6 +40,11 @@ import ServiceAgreement         from './pages/ServiceAgreement'
 import Leave                   from './pages/Leave.jsx'
 import Chatbot                 from './pages/Chatbot'
 import ChatWidget               from './pages/ChatWidget'
+import AggregatorSettings      from './pages/AggregatorSettings'
+import GstReports           from './pages/GstReports'
+import KitchenDisplay       from './pages/KitchenDisplay'
+import DirectAggregator     from './pages/DirectAggregator'
+import AuditLog             from './pages/AuditLog'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -89,6 +94,11 @@ export default function App() {
           <Route path="service-agreement"      element={<ServiceAgreement standalone />} />
           <Route path="leave"                  element={<Leave />} />
           <Route path="chatbot"               element={<Chatbot />} />
+          <Route path="aggregator"            element={<AggregatorSettings />} />
+          <Route path="gst-reports"        element={<GstReports />} />
+          <Route path="kitchen-display"    element={<KitchenDisplay />} />
+          <Route path="direct-aggregator"  element={<DirectAggregator />} />
+          <Route path="audit-log"          element={<AuditLog />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
