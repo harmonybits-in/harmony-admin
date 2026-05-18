@@ -160,6 +160,22 @@ export const expenseApi = {
   delete: (rid, id) => api.delete(`/expenses/${id}`),
 }
 
+// ── Promotions Engine ─────────────────────────────────────────────
+export const promotionRuleApi = {
+  getAll:       ()           => api.get('/promotions'),
+  create:       (body)       => api.post('/promotions', body),
+  update:       (id, body)   => api.put(`/promotions/${id}`, body),
+  delete:       (id)         => api.delete(`/promotions/${id}`),
+  toggleActive: (id, active) => api.patch(`/promotions/${id}/active?active=${active}`),
+  evaluate:     (orderAmount) => api.post('/promotions/evaluate', { orderAmount }),
+}
+
+export const expenseCategoryApi = {
+  getAll:  ()          => api.get('/expense-categories'),
+  create:  (name)      => api.post('/expense-categories', { name }),
+  delete:  (id)        => api.delete(`/expense-categories/${id}`),
+}
+
 // ── Audit Log ─────────────────────────────────────────────────────
 export const auditApi = {
   getLogs: (rid, { action, entityType, page = 0 } = {}) => {

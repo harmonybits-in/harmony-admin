@@ -2,6 +2,14 @@ import { useNavigate } from 'react-router-dom'
 
 const CARDS = [
   {
+    to:    '/promotion-rules',
+    icon:  '⚡',
+    title: 'Promotion Rules',
+    desc:  'Rule-based automatic discounts. Min order, happy hour, day-of-week conditions set karo.',
+    color: '#f59e0b',
+    stats: ['Auto Apply', 'Happy Hour', 'Day-based'],
+  },
+  {
     to:    '/discounts',
     icon:  '🏷️',
     title: 'Discounts',
@@ -31,7 +39,7 @@ export default function Promotions() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         {CARDS.map(card => (
           <div key={card.to} onClick={() => navigate(card.to)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)',
