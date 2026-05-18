@@ -160,6 +160,18 @@ export const expenseApi = {
   delete: (rid, id) => api.delete(`/expenses/${id}`),
 }
 
+// ── Refunds & Credit Notes ────────────────────────────────────────
+export const refundApi = {
+  getAll:      (params = '') => api.get(`/refunds?${params}`),
+  getOne:      (id)          => api.get(`/refunds/${id}`),
+  create:      (body)        => api.post('/refunds', body),
+  approve:     (id, expiry)  => api.patch(`/refunds/${id}/approve${expiry ? `?creditNoteExpiry=${expiry}` : ''}`),
+  reject:      (id, reason)  => api.patch(`/refunds/${id}/reject`, { reason }),
+  getCreditNotes: (params='') => api.get(`/refunds/credit-notes?${params}`),
+  validateCN:  (code)        => api.get(`/refunds/credit-notes/validate/${code}`),
+  applyCN:     (id, amount)  => api.patch(`/refunds/credit-notes/${id}/apply`, { applyAmount: amount }),
+}
+
 // ── Promotions Engine ─────────────────────────────────────────────
 export const promotionRuleApi = {
   getAll:       ()           => api.get('/promotions'),

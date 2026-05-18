@@ -47,6 +47,7 @@ import DirectAggregator     from './pages/DirectAggregator'
 import AuditLog             from './pages/AuditLog'
 import Expenses             from './pages/Expenses'
 import PromotionRules       from './pages/PromotionRules'
+import Refunds              from './pages/Refunds'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="audit-log"          element={<AuditLog />} />
           <Route path="expenses"           element={<Expenses />} />
           <Route path="promotion-rules"    element={<PromotionRules />} />
+          <Route path="refunds"            element={<Refunds />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
