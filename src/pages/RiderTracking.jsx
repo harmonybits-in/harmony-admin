@@ -12,8 +12,11 @@ function useRiderApi() {
   const h     = { Authorization: `Bearer ${token}` }
   return {
     getActiveRiders: () =>
-      fetch(`${BASE}/admin/riders/locations?restaurantId=${rid}`, { headers: h })
+      fetch(`${BASE}/api/v1/admin/riders/locations?restaurantId=${rid}`, { headers: h })
         .then(r => r.json()),
+    getOptimizedRoute: (riderId) =>
+      fetch(`${BASE}/api/v1/delivery/${riderId}/optimize-route`, { headers: h })
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json() }),
   }
 }
 
@@ -48,47 +51,37 @@ const RESTAURANT_LAT  = 28.9845
 const RESTAURANT_LNG  = 77.7064
 
 // ── Load Google Maps ──────────────────────────────────────────────
-// Module-level guards — script sirf ek baar load hoga, chahe kitne bhi components ho
 let _gmapsPromise = null
 
 function loadGoogleMaps() {
-  // Already loaded
   if (window.google?.maps) return Promise.resolve(window.google.maps)
-  // Already loading — same promise return karo
   if (_gmapsPromise) return _gmapsPromise
-  // No key — fail fast
   if (!GOOGLE_MAPS_KEY) return Promise.reject(new Error('NO_KEY'))
 
   _gmapsPromise = new Promise((resolve, reject) => {
-    // Double-check after async gap
     if (window.google?.maps) { resolve(window.google.maps); return }
-    // Check if script tag already exists (React StrictMode double-effect)
-    if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-      // Wait for it to load
-      const poll = setInterval(() => {
-        if (window.google?.maps) { clearInterval(poll); resolve(window.google.maps) }
-      }, 100)
-      setTimeout(() => { clearInterval(poll); reject(new Error('TIMEOUT')) }, 10000)
-      return
-    }
+    const cbName = '__gmInitCb'
+    window[cbName] = () => { resolve(window.google.maps); delete window[cbName] }
     const s   = document.createElement('script')
-    s.src     = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&loading=async`
+    s.src     = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&callback=${cbName}`
     s.async   = true
-    s.onload  = () => resolve(window.google.maps)
-    s.onerror = () => { _gmapsPromise = null; reject(new Error('LOAD_FAILED')) }
+    s.defer   = true
+    s.onerror = () => { _gmapsPromise = null; delete window[cbName]; reject(new Error('LOAD_FAILED')) }
     document.head.appendChild(s)
   })
   return _gmapsPromise
 }
 
 // ── Google Map Component ──────────────────────────────────────────
-function GoogleMapView({ riders, selected, onSelect }) {
-  const mapRef      = useRef(null)
-  const mapInstance = useRef(null)
-  const markersRef  = useRef({})
-  const infoWinRef  = useRef(null)
-  const pathsRef    = useRef({})   // riderId → Polyline (trail)
-  const trailRef    = useRef({})   // riderId → last 10 positions
+function GoogleMapView({ riders, selected, onSelect, optimizedRoute, onClearRoute }) {
+  const mapRef         = useRef(null)
+  const mapInstance    = useRef(null)
+  const markersRef     = useRef({})
+  const infoWinRef     = useRef(null)
+  const pathsRef       = useRef({})
+  const trailRef       = useRef({})
+  const routeMarkersRef= useRef([])   // stop numbered markers
+  const routePolyRef   = useRef(null) // route polyline
 
   // Init map
   useEffect(() => {
@@ -96,20 +89,18 @@ function GoogleMapView({ riders, selected, onSelect }) {
     loadGoogleMaps().then(gmaps => {
       if (cancelled || mapInstance.current || !mapRef.current) return
       mapInstance.current = new gmaps.Map(mapRef.current, {
-        center:              { lat: RESTAURANT_LAT, lng: RESTAURANT_LNG },
-        zoom:                14,
-        mapTypeControl:      false,
-        streetViewControl:   false,
-        fullscreenControl:   true,
-        zoomControlOptions:  { position: gmaps.ControlPosition.RIGHT_CENTER },
+        center:             { lat: RESTAURANT_LAT, lng: RESTAURANT_LNG },
+        zoom:               14,
+        mapTypeControl:     false,
+        streetViewControl:  false,
+        fullscreenControl:  true,
+        zoomControlOptions: { position: gmaps.ControlPosition.RIGHT_CENTER },
         styles: [
           { featureType:'poi',     stylers:[{ visibility:'off' }] },
           { featureType:'transit', stylers:[{ visibility:'off' }] },
         ],
       })
       infoWinRef.current = new gmaps.InfoWindow()
-
-      // Restaurant marker
       new gmaps.Marker({
         map:      mapInstance.current,
         position: { lat: RESTAURANT_LAT, lng: RESTAURANT_LNG },
@@ -122,40 +113,25 @@ function GoogleMapView({ riders, selected, onSelect }) {
     return () => { cancelled = true }
   }, [])
 
-  // Update markers when riders change (REST poll + WS updates)
+  // Update rider markers when riders change
   useEffect(() => {
     if (!mapInstance.current || !window.google?.maps) return
     const gmaps = window.google.maps
-
     riders.forEach(rider => {
       const pos   = { lat: rider.latitude, lng: rider.longitude }
       const cfg   = STATUS_CFG[rider.status] || STATUS_CFG.OFFLINE
       const isSel = selected?.id === rider.id
-      const icon  = {
-        url:        cfg.pin,
-        scaledSize: new gmaps.Size(isSel ? 44 : 36, isSel ? 44 : 36),
-      }
+      const icon  = { url: cfg.pin, scaledSize: new gmaps.Size(isSel ? 44 : 36, isSel ? 44 : 36) }
 
       if (markersRef.current[rider.id]) {
-        // ── Smooth animation to new position ──────────────────────
         animateMarker(markersRef.current[rider.id], pos, gmaps)
         markersRef.current[rider.id].setIcon(icon)
-        // Update trail
         updateTrail(rider.id, pos, gmaps)
       } else {
-        // ── Create new marker ─────────────────────────────────────
         const marker = new gmaps.Marker({
-          map:       mapInstance.current,
-          position:  pos,
-          title:     rider.name,
-          icon,
+          map: mapInstance.current, position: pos, title: rider.name, icon,
           animation: rider.available ? gmaps.Animation.DROP : null,
-          label: {
-            text:      rider.name.split(' ')[0][0],
-            color:     '#fff',
-            fontWeight:'bold',
-            fontSize:  '12px',
-          },
+          label: { text: rider.name.split(' ')[0][0], color:'#fff', fontWeight:'bold', fontSize:'12px' },
           zIndex: isSel ? 100 : 10,
         })
         marker.addListener('click', () => {
@@ -167,8 +143,6 @@ function GoogleMapView({ riders, selected, onSelect }) {
         trailRef.current[rider.id]   = [pos]
       }
     })
-
-    // Remove stale markers
     Object.keys(markersRef.current).forEach(id => {
       if (!riders.find(r => r.id === Number(id))) {
         markersRef.current[id].setMap(null)
@@ -187,51 +161,95 @@ function GoogleMapView({ riders, selected, onSelect }) {
     mapInstance.current.setZoom(16)
   }, [selected?.id])
 
-  // ── Trail (last 10 positions) ──────────────────────────────────
+  // Draw / clear optimized route
+  useEffect(() => {
+    if (!mapInstance.current || !window.google?.maps) return
+    const gmaps = window.google.maps
+
+    // Clear previous route
+    routeMarkersRef.current.forEach(m => m.setMap(null))
+    routeMarkersRef.current = []
+    if (routePolyRef.current) { routePolyRef.current.setMap(null); routePolyRef.current = null }
+
+    if (!optimizedRoute || !optimizedRoute.stops?.length) return
+
+    const path = [
+      { lat: optimizedRoute.riderLatitude, lng: optimizedRoute.riderLongitude },
+      ...optimizedRoute.stops.map(s => ({ lat: s.latitude, lng: s.longitude })),
+    ]
+
+    // Orange dashed route polyline
+    routePolyRef.current = new gmaps.Polyline({
+      path,
+      geodesic:      true,
+      strokeColor:   '#f97316',
+      strokeOpacity: 0.85,
+      strokeWeight:  3,
+      map:           mapInstance.current,
+      zIndex:        5,
+      icons: [{
+        icon:   { path: gmaps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3, strokeColor:'#f97316' },
+        offset: '100%',
+        repeat: '70px',
+      }],
+    })
+
+    // Numbered stop markers
+    optimizedRoute.stops.forEach(stop => {
+      const marker = new gmaps.Marker({
+        map:      mapInstance.current,
+        position: { lat: stop.latitude, lng: stop.longitude },
+        title:    `Stop ${stop.sequence}: ${stop.address}`,
+        label: { text: String(stop.sequence), color:'#fff', fontWeight:'bold', fontSize:'11px' },
+        icon: {
+          path:         gmaps.SymbolPath.CIRCLE,
+          scale:        13,
+          fillColor:    '#f97316',
+          fillOpacity:  1,
+          strokeColor:  '#fff',
+          strokeWeight: 2,
+        },
+        zIndex: 200,
+      })
+      routeMarkersRef.current.push(marker)
+    })
+
+    // Fit map to show full route
+    const bounds = new gmaps.LatLngBounds()
+    path.forEach(p => bounds.extend(p))
+    mapInstance.current.fitBounds(bounds, { top:40, bottom:40, left:40, right:40 })
+  }, [optimizedRoute])
+
+  // ── Trail ────────────────────────────────────────────────────────
   function updateTrail(riderId, newPos, gmaps) {
     const trail = trailRef.current[riderId] || []
     trail.push(newPos)
     if (trail.length > 10) trail.shift()
     trailRef.current[riderId] = trail
-
     if (pathsRef.current[riderId]) {
       pathsRef.current[riderId].setPath(trail)
     } else {
       pathsRef.current[riderId] = new gmaps.Polyline({
-        path:          trail,
-        map:           mapInstance.current,
-        geodesic:      true,
-        strokeColor:   '#2563eb',
-        strokeOpacity: 0.5,
-        strokeWeight:  2,
-        icons: [{
-          icon:   { path: gmaps.SymbolPath.FORWARD_CLOSED_ARROW, scale:2 },
-          offset: '100%',
-        }],
+        path, map: mapInstance.current, geodesic: true,
+        strokeColor:'#2563eb', strokeOpacity:0.5, strokeWeight:2,
+        icons: [{ icon:{ path:gmaps.SymbolPath.FORWARD_CLOSED_ARROW, scale:2 }, offset:'100%' }],
       })
     }
   }
 
-  // ── Smooth marker animation ────────────────────────────────────
+  // ── Smooth animation ────────────────────────────────────────────
   function animateMarker(marker, targetPos, gmaps) {
     const startPos = marker.getPosition()
     if (!startPos) { marker.setPosition(targetPos); return }
-
     const startLat = startPos.lat(), startLng = startPos.lng()
-    const deltaLat = targetPos.lat - startLat
-    const deltaLng = targetPos.lng - startLng
-    const steps    = 30
-    let   step     = 0
-
+    const deltaLat = targetPos.lat - startLat, deltaLng = targetPos.lng - startLng
+    let step = 0
     const timer = setInterval(() => {
       step++
-      const frac = step / steps
-      marker.setPosition({
-        lat: startLat + deltaLat * easeInOut(frac),
-        lng: startLng + deltaLng * easeInOut(frac),
-      })
-      if (step >= steps) clearInterval(timer)
-    }, 16)  // ~60fps
+      const frac = step / 30
+      marker.setPosition({ lat: startLat + deltaLat * easeInOut(frac), lng: startLng + deltaLng * easeInOut(frac) })
+      if (step >= 30) clearInterval(timer)
+    }, 16)
   }
 
   function easeInOut(t) { return t < .5 ? 2*t*t : -1+(4-2*t)*t }
@@ -244,15 +262,12 @@ function GoogleMapView({ riders, selected, onSelect }) {
         <span style="padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;
           background:${cfg.bg};color:${cfg.color}">${cfg.label}</span>
         <div style="margin-top:8px;font-size:12px;color:#333">
-          📦 <b>${rider.currentOrders||0}</b> orders &nbsp;
-          ⭐ <b>${rider.rating||'—'}</b> &nbsp;
-          🔢 Cap: ${rider.capacity||'—'}
+          📦 <b>${rider.currentOrders||0}</b> orders &nbsp;⭐ <b>${rider.rating||'—'}</b> &nbsp;🔢 Cap: ${rider.capacity||'—'}
         </div>
         <div style="margin-top:4px;font-size:10px;color:#aaa;font-family:monospace">
           📍 ${rider.latitude.toFixed(5)}, ${rider.longitude.toFixed(5)}
         </div>
-      </div>
-    `
+      </div>`
   }
 
   return (
@@ -260,6 +275,22 @@ function GoogleMapView({ riders, selected, onSelect }) {
       overflow:'hidden', border:'1px solid #e8eaed' }}>
       <div ref={mapRef} style={{ width:'100%', height:'100%' }}/>
       {!GOOGLE_MAPS_KEY && <NoKeyOverlay/>}
+
+      {/* Route active overlay badge */}
+      {optimizedRoute?.stopCount > 0 && (
+        <div style={{ position:'absolute', top:10, left:10,
+          background:'#fff', border:'2px solid #f97316', borderRadius:8,
+          padding:'6px 12px', display:'flex', alignItems:'center', gap:8,
+          boxShadow:'0 2px 8px rgba(249,115,22,.25)', fontSize:12, fontWeight:600 }}>
+          <span style={{ color:'#f97316' }}>🗺 Route Active</span>
+          <span style={{ color:'#aaa', fontWeight:400 }}>
+            {optimizedRoute.stopCount} stops · {optimizedRoute.totalDistanceKm} km
+          </span>
+          <button onClick={onClearRoute}
+            style={{ background:'none', border:'none', cursor:'pointer',
+              color:'#aaa', fontSize:14, padding:0, lineHeight:1 }}>×</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -271,13 +302,7 @@ function NoKeyOverlay() {
       display:'flex', flexDirection:'column', alignItems:'center',
       justifyContent:'center', gap:10 }}>
       <div style={{ fontSize:36 }}>🗺️</div>
-      <div style={{ fontSize:14, fontWeight:600, color:'#1e40af' }}>
-        Google Maps API Key Required
-      </div>
-      <div style={{ fontSize:12, color:'#555', textAlign:'center', maxWidth:320 }}>
-        <code style={{ background:'#dbeafe', padding:'2px 6px', borderRadius:4,
-          fontSize:11 }}>.env.local</code> mein add karo:
-      </div>
+      <div style={{ fontSize:14, fontWeight:600, color:'#1e40af' }}>Google Maps API Key Required</div>
       <div style={{ background:'#1e293b', color:'#10b981', padding:'8px 18px',
         borderRadius:6, fontSize:12, fontFamily:'monospace' }}>
         VITE_GOOGLE_MAPS_KEY=your_key_here
@@ -286,17 +311,26 @@ function NoKeyOverlay() {
   )
 }
 
+// ── Status badge for delivery stop ───────────────────────────────
+const STOP_STATUS = {
+  ASSIGNED:   { label:'Assigned',   color:'#2563eb', bg:'#dbeafe' },
+  PICKED_UP:  { label:'Picked Up',  color:'#d97706', bg:'#fef3c7' },
+  ON_THE_WAY: { label:'On the Way', color:'#16a34a', bg:'#dcfce7' },
+}
+
 // ── Main Component ────────────────────────────────────────────────
 export default function RiderTracking() {
   const api  = useRiderApi()
   const toast= useToast()
 
-  const [riders,    setRiders]    = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [selected,  setSelected]  = useState(null)
-  const [filter,    setFilter]    = useState('ALL')
-  const [wsStatus,  setWsStatus]  = useState('connecting')   // connecting|live|error
-  const [lastUpdate,setLastUpdate]= useState(null)
+  const [riders,         setRiders]         = useState([])
+  const [loading,        setLoading]        = useState(true)
+  const [selected,       setSelected]       = useState(null)
+  const [filter,         setFilter]         = useState('ALL')
+  const [wsStatus,       setWsStatus]       = useState('connecting')
+  const [lastUpdate,     setLastUpdate]     = useState(null)
+  const [optimizedRoute, setOptimizedRoute] = useState(null)
+  const [routeLoading,   setRouteLoading]   = useState(false)
   const intervalRef = useRef(null)
 
   // ── Initial REST load ─────────────────────────────────────────
@@ -319,45 +353,51 @@ export default function RiderTracking() {
 
   useEffect(() => {
     loadRiders()
-    // Fallback REST poll every 30s (WebSocket ke saath kam zaroorat)
     intervalRef.current = setInterval(loadRiders, 30000)
     return () => clearInterval(intervalRef.current)
   }, [])
 
-  // ── WebSocket — real-time location updates ────────────────────
+  // ── WebSocket ─────────────────────────────────────────────────
   const riderIds = riders.map(r => r.id)
-
   const { reconnect } = useRiderWebSocket(riderIds, (update) => {
-    // WS se location update aaya — marker smoothly move karega
     setRiders(prev => prev.map(r =>
       r.id === update.riderId
-        ? { ...r,
-            latitude:    update.latitude,
-            longitude:   update.longitude,
-            lastUpdated: update.timestamp,
-          }
+        ? { ...r, latitude:update.latitude, longitude:update.longitude, lastUpdated:update.timestamp }
         : r
     ))
-    // Selected rider ka bottom bar bhi update hoga
     setSelected(prev =>
       prev?.id === update.riderId
-        ? { ...prev, latitude: update.latitude, longitude: update.longitude }
+        ? { ...prev, latitude:update.latitude, longitude:update.longitude }
         : prev
     )
     setWsStatus('live')
-    setLastUpdate(new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' }))
-  })
+    setLastUpdate(new Date().toLocaleTimeString('en-IN',
+      { hour:'2-digit', minute:'2-digit', second:'2-digit' }))
+  }, () => setWsStatus('live'))
 
-  // WS connection status check
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (wsStatus === 'connecting') setWsStatus('error')
-    }, 8000)
-    return () => clearTimeout(timer)
-  }, [])
+  // ── Route optimization ────────────────────────────────────────
+  const optimizeRoute = async (riderId) => {
+    setRouteLoading(true)
+    try {
+      const route = await api.getOptimizedRoute(riderId)
+      if (route.stopCount === 0) {
+        toast?.('No active deliveries for this rider', 'warning')
+      } else {
+        setOptimizedRoute(route)
+      }
+    } catch(e) {
+      toast?.('Route optimization failed', 'error')
+    } finally {
+      setRouteLoading(false)
+    }
+  }
+
+  const clearRoute = () => setOptimizedRoute(null)
+
+  // Dismiss route when rider is deselected
+  useEffect(() => { if (!selected) setOptimizedRoute(null) }, [selected])
 
   const filtered = riders.filter(r => filter === 'ALL' || r.status === filter)
-
   const stats = {
     total:      riders.length,
     available:  riders.filter(r => r.status === 'AVAILABLE').length,
@@ -365,7 +405,6 @@ export default function RiderTracking() {
     offline:    riders.filter(r => r.status === 'OFFLINE').length,
   }
 
-  // ── WS Status badge ───────────────────────────────────────────
   const WS_BADGE = {
     connecting: { label:'Connecting...', color:'#d97706', bg:'#fef3c7', dot:'#f59e0b' },
     live:       { label:'LIVE',          color:'#16a34a', bg:'#dcfce7', dot:'#16a34a' },
@@ -379,37 +418,26 @@ export default function RiderTracking() {
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', margin:0 }}>
-            Rider Tracking
-          </h1>
+          <h1 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', margin:0 }}>Rider Tracking</h1>
           <p style={{ fontSize:12, color:'#aaa', marginTop:3 }}>
             Real-time location via WebSocket · Google Maps
-            {lastUpdate && <span style={{ color:'#10b981', marginLeft:8 }}>
-              ↻ {lastUpdate}
-            </span>}
+            {lastUpdate && <span style={{ color:'#10b981', marginLeft:8 }}>↻ {lastUpdate}</span>}
           </p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          {/* WebSocket status badge */}
           <div style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 12px',
             borderRadius:20, background:badge.bg, border:`1px solid ${badge.dot}30` }}>
             <div style={{ width:8, height:8, borderRadius:50, background:badge.dot,
               animation: wsStatus==='live' ? 'blink 1.5s ease-in-out infinite' : 'none' }}/>
-            <span style={{ fontSize:11, fontWeight:600, color:badge.color }}>
-              {badge.label}
-            </span>
+            <span style={{ fontSize:11, fontWeight:600, color:badge.color }}>{badge.label}</span>
           </div>
-
-          {/* Reconnect button — only on error */}
           {wsStatus === 'error' && (
             <button onClick={() => { reconnect(); setWsStatus('connecting') }}
               style={{ padding:'5px 12px', borderRadius:6, border:'1px solid #fca5a5',
-                background:'#fff', color:'#ef4444', fontSize:11,
-                fontWeight:600, cursor:'pointer' }}>
+                background:'#fff', color:'#ef4444', fontSize:11, fontWeight:600, cursor:'pointer' }}>
               🔄 Reconnect
             </button>
           )}
-
           <button onClick={loadRiders} style={{ padding:'7px 14px', borderRadius:6,
             border:'1px solid #dde1e7', background:'#fff', color:'#555',
             fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
@@ -443,109 +471,185 @@ export default function RiderTracking() {
         ))}
       </div>
 
-      {/* Map + List */}
+      {/* Map + Panels */}
       <div style={{ display:'flex', gap:14, flex:1, minHeight:0, height:460 }}>
 
         {/* Google Map */}
-        <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ flex:1, minWidth:0, height:'100%' }}>
           {loading ? (
             <div style={{ height:'100%', background:'#f0f9ff', borderRadius:10,
               display:'flex', alignItems:'center', justifyContent:'center',
               border:'1px solid #bfdbfe', color:'#aaa', fontSize:14,
               flexDirection:'column', gap:8 }}>
-              <div style={{ fontSize:32 }}>🗺️</div>
-              Loading map...
+              <div style={{ fontSize:32 }}>🗺️</div>Loading map...
             </div>
           ) : (
             <GoogleMapView
               riders={filtered}
               selected={selected}
               onSelect={r => setSelected(s => s?.id===r.id ? null : r)}
+              optimizedRoute={optimizedRoute}
+              onClearRoute={clearRoute}
             />
           )}
         </div>
 
-        {/* Rider list panel */}
+        {/* Right panel: route stops (if active) or rider list */}
         <div style={{ width:290, flexShrink:0, display:'flex', flexDirection:'column',
-          background:'#fff', border:'1px solid #e8eaed', borderRadius:10,
-          overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,.04)' }}>
+          background:'#fff', border:`1px solid ${optimizedRoute ? '#fed7aa' : '#e8eaed'}`,
+          borderRadius:10, overflow:'hidden',
+          boxShadow: optimizedRoute ? '0 2px 12px rgba(249,115,22,.15)' : '0 1px 4px rgba(0,0,0,.04)' }}>
 
-          <div style={{ padding:'11px 14px', borderBottom:'1px solid #f0f0f0',
-            background:'#fafafa', display:'flex', justifyContent:'space-between',
-            alignItems:'center' }}>
-            <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>
-              🛵 Riders ({filtered.length})
-            </span>
-            {filter !== 'ALL' && (
-              <button onClick={() => setFilter('ALL')} style={{ fontSize:10,
-                color:'#e53e3e', background:'none', border:'none',
-                cursor:'pointer', fontWeight:600 }}>
-                Clear ×
-              </button>
-            )}
-          </div>
-
-          <div style={{ flex:1, overflowY:'auto' }}>
-            {filtered.map(rider => {
-              const cfg  = STATUS_CFG[rider.status] || STATUS_CFG.OFFLINE
-              const isSel= selected?.id === rider.id
-              // Recently updated via WS — flash green
-              const isRecent = rider.lastUpdated && (Date.now() - rider.lastUpdated) < 3000
-
-              return (
-                <div key={rider.id}
-                  onClick={() => setSelected(s => s?.id===rider.id ? null : rider)}
-                  style={{ padding:'11px 14px', borderBottom:'1px solid #f5f5f5',
-                    cursor:'pointer', transition:'all .2s',
-                    background: isRecent ? '#f0fdf4' : isSel ? '#eff6ff' : '#fff',
-                    borderLeft: `3px solid ${isSel?'#2563eb':isRecent?'#16a34a':'transparent'}` }}
-                  onMouseEnter={e=>{ if(!isSel&&!isRecent) e.currentTarget.style.background='#fafafa' }}
-                  onMouseLeave={e=>{ if(!isSel&&!isRecent) e.currentTarget.style.background='#fff' }}>
-
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                    <div>
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>
-                          {rider.name}
-                        </span>
-                        {/* Live update dot */}
-                        {isRecent && (
-                          <div style={{ width:7, height:7, borderRadius:50,
-                            background:'#16a34a', flexShrink:0,
-                            animation:'blink 1s ease-in-out infinite' }}/>
-                        )}
-                      </div>
-                      <div style={{ fontSize:11, color:'#888' }}>{rider.phone}</div>
-                    </div>
-                    <span style={{ fontSize:10, padding:'2px 8px', borderRadius:20,
-                      fontWeight:600, background:cfg.bg, color:cfg.color,
-                      whiteSpace:'nowrap' }}>
-                      {cfg.label}
-                    </span>
-                  </div>
-
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)',
-                    gap:4, marginTop:8, textAlign:'center' }}>
-                    {[
-                      [rider.currentOrders  ||0, 'Orders',  '#2563eb'],
-                      [rider.todayDeliveries||0, 'Today',   '#10b981'],
-                      [`${rider.rating||'—'}⭐`, 'Rating', '#f59e0b'],
-                      [rider.totalDeliveries||0, 'Total',   '#6366f1'],
-                    ].map(([v,l,c]) => (
-                      <div key={l}>
-                        <div style={{ fontSize:12, fontWeight:700, color:c }}>{v}</div>
-                        <div style={{ fontSize:9, color:'#aaa' }}>{l}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ marginTop:5, fontSize:10, color:'#aaa', fontFamily:'monospace' }}>
-                    📍 {rider.latitude.toFixed(4)}, {rider.longitude.toFixed(4)}
+          {optimizedRoute ? (
+            /* ── Route stops panel ── */
+            <>
+              <div style={{ padding:'11px 14px', borderBottom:'1px solid #fed7aa',
+                background:'#fff7ed', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div>
+                  <span style={{ fontSize:13, fontWeight:700, color:'#c2410c' }}>
+                    🗺 Optimized Route
+                  </span>
+                  <div style={{ fontSize:10, color:'#9a3412', marginTop:1 }}>
+                    {optimizedRoute.stopCount} stops · {optimizedRoute.totalDistanceKm} km total
                   </div>
                 </div>
-              )
-            })}
-          </div>
+                <button onClick={clearRoute}
+                  style={{ background:'none', border:'none', cursor:'pointer',
+                    color:'#f97316', fontSize:18, lineHeight:1 }}>×</button>
+              </div>
+
+              <div style={{ flex:1, overflowY:'auto' }}>
+                {/* Rider start */}
+                <div style={{ padding:'10px 14px', borderBottom:'1px solid #f5f5f5',
+                  display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:26, height:26, borderRadius:50,
+                    background:'#2563eb', display:'flex', alignItems:'center',
+                    justifyContent:'center', flexShrink:0, fontSize:13 }}>🛵</div>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>
+                      {selected?.name || 'Rider'}
+                    </div>
+                    <div style={{ fontSize:10, color:'#aaa', fontFamily:'monospace' }}>
+                      {optimizedRoute.riderLatitude.toFixed(4)}, {optimizedRoute.riderLongitude.toFixed(4)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stops */}
+                {optimizedRoute.stops.map(stop => {
+                  const sc = STOP_STATUS[stop.status] || STOP_STATUS.ASSIGNED
+                  return (
+                    <div key={stop.deliveryId}
+                      style={{ padding:'10px 14px', borderBottom:'1px solid #f5f5f5' }}>
+                      <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                        {/* Sequence badge */}
+                        <div style={{ width:26, height:26, borderRadius:50,
+                          background:'#f97316', color:'#fff', fontSize:12,
+                          fontWeight:700, display:'flex', alignItems:'center',
+                          justifyContent:'center', flexShrink:0 }}>
+                          {stop.sequence}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e',
+                            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {stop.address || 'Address N/A'}
+                          </div>
+                          <div style={{ display:'flex', gap:6, marginTop:3, alignItems:'center' }}>
+                            <span style={{ fontSize:10, padding:'1px 7px', borderRadius:10,
+                              background:sc.bg, color:sc.color, fontWeight:600 }}>
+                              {sc.label}
+                            </span>
+                            <span style={{ fontSize:10, color:'#aaa' }}>
+                              +{stop.distanceFromPrev} km
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Total */}
+                <div style={{ padding:'10px 14px', background:'#fff7ed',
+                  borderTop:'1px solid #fed7aa', display:'flex',
+                  justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ fontSize:12, color:'#c2410c', fontWeight:600 }}>Total Distance</span>
+                  <span style={{ fontSize:14, fontWeight:800, color:'#ea580c' }}>
+                    {optimizedRoute.totalDistanceKm} km
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* ── Rider list panel ── */
+            <>
+              <div style={{ padding:'11px 14px', borderBottom:'1px solid #f0f0f0',
+                background:'#fafafa', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>
+                  🛵 Riders ({filtered.length})
+                </span>
+                {filter !== 'ALL' && (
+                  <button onClick={() => setFilter('ALL')} style={{ fontSize:10,
+                    color:'#e53e3e', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>
+                    Clear ×
+                  </button>
+                )}
+              </div>
+
+              <div style={{ flex:1, overflowY:'auto' }}>
+                {filtered.map(rider => {
+                  const cfg    = STATUS_CFG[rider.status] || STATUS_CFG.OFFLINE
+                  const isSel  = selected?.id === rider.id
+                  const isRecent = rider.lastUpdated && (Date.now() - rider.lastUpdated) < 3000
+                  return (
+                    <div key={rider.id}
+                      onClick={() => setSelected(s => s?.id===rider.id ? null : rider)}
+                      style={{ padding:'11px 14px', borderBottom:'1px solid #f5f5f5',
+                        cursor:'pointer', transition:'all .2s',
+                        background: isRecent ? '#f0fdf4' : isSel ? '#eff6ff' : '#fff',
+                        borderLeft: `3px solid ${isSel?'#2563eb':isRecent?'#16a34a':'transparent'}` }}
+                      onMouseEnter={e=>{ if(!isSel&&!isRecent) e.currentTarget.style.background='#fafafa' }}
+                      onMouseLeave={e=>{ if(!isSel&&!isRecent) e.currentTarget.style.background='#fff' }}>
+
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                        <div>
+                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                            <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{rider.name}</span>
+                            {isRecent && <div style={{ width:7, height:7, borderRadius:50,
+                              background:'#16a34a', flexShrink:0,
+                              animation:'blink 1s ease-in-out infinite' }}/>}
+                          </div>
+                          <div style={{ fontSize:11, color:'#888' }}>{rider.phone}</div>
+                        </div>
+                        <span style={{ fontSize:10, padding:'2px 8px', borderRadius:20,
+                          fontWeight:600, background:cfg.bg, color:cfg.color, whiteSpace:'nowrap' }}>
+                          {cfg.label}
+                        </span>
+                      </div>
+
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)',
+                        gap:4, marginTop:8, textAlign:'center' }}>
+                        {[
+                          [rider.currentOrders  ||0, 'Orders', '#2563eb'],
+                          [rider.todayDeliveries||0, 'Today',  '#10b981'],
+                          [`${rider.rating||'—'}⭐`, 'Rating','#f59e0b'],
+                          [rider.totalDeliveries||0, 'Total',  '#6366f1'],
+                        ].map(([v,l,c]) => (
+                          <div key={l}>
+                            <div style={{ fontSize:12, fontWeight:700, color:c }}>{v}</div>
+                            <div style={{ fontSize:9, color:'#aaa' }}>{l}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop:5, fontSize:10, color:'#aaa', fontFamily:'monospace' }}>
+                        📍 {rider.latitude.toFixed(4)}, {rider.longitude.toFixed(4)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -577,9 +681,24 @@ export default function RiderTracking() {
               <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{value}</div>
             </div>
           ))}
-          <button onClick={() => setSelected(null)} style={{ marginLeft:'auto',
-            background:'none', border:'none', cursor:'pointer',
-            color:'#aaa', fontSize:20 }}>×</button>
+
+          {/* Optimize Route button */}
+          <button
+            onClick={() => optimizeRoute(selected.id)}
+            disabled={routeLoading}
+            style={{ marginLeft:'auto', padding:'7px 16px', borderRadius:7,
+              border:'none', cursor: routeLoading ? 'not-allowed' : 'pointer',
+              background: optimizedRoute ? '#fff7ed' : '#f97316',
+              color: optimizedRoute ? '#ea580c' : '#fff',
+              fontSize:12, fontWeight:700, display:'flex', alignItems:'center', gap:6,
+              border: optimizedRoute ? '1px solid #fed7aa' : 'none',
+              transition:'all .15s',
+              opacity: routeLoading ? 0.7 : 1 }}>
+            {routeLoading ? '⏳ Optimizing...' : optimizedRoute ? '🔄 Re-optimize' : '🗺 Optimize Route'}
+          </button>
+
+          <button onClick={() => setSelected(null)} style={{ background:'none', border:'none',
+            cursor:'pointer', color:'#aaa', fontSize:20 }}>×</button>
         </div>
       )}
 
