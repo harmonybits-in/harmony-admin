@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useCallback, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { leaveApi, chatbotApi } from '../api/client'
+import ErrorBoundary from './ErrorBoundary'
 
 function useOnlineStatus() {
   const [online, setOnline] = useState(navigator.onLine)
@@ -85,7 +86,8 @@ const NAV_GROUPS = [
   {
     key: 'tables', label: 'Dine-in',
     items: [
-      { to: '/tables', icon: '🪑', label: 'Table Management' },
+      { to: '/tables',       icon: '🪑', label: 'Table Management' },
+      { to: '/reservations', icon: '📅', label: 'Reservations'     },
     ],
   },
   {
@@ -483,7 +485,9 @@ function MainContent() {
   const isFullPage = FULL_PAGE_PATHS.some(p => location.pathname.startsWith(p))
   return (
     <div style={{ padding: isFullPage ? '0' : '1.5rem 2rem', minHeight: '100%', flex: 1 }}>
-      <Outlet />
+      <ErrorBoundary key={location.pathname}>
+        <Outlet />
+      </ErrorBoundary>
     </div>
   )
 }

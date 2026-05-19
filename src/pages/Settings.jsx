@@ -143,6 +143,12 @@ export default function Settings() {
   })
   const [loyaltyDirty, setLoyaltyDirty] = useState(false)
 
+  // ── Device Sync Code ──
+  const [syncCode, setSyncCode] = useState('')
+  const [syncCodeEdit, setSyncCodeEdit] = useState('')
+  const [codeCopied, setCodeCopied] = useState(false)
+  const [savingCode, setSavingCode] = useState(false)
+
   useEffect(() => { loadRestaurant() }, [])
 
   async function loadRestaurant() {
@@ -180,6 +186,7 @@ export default function Settings() {
           loyaltyExpiryDays:   r.loyaltyExpiryDays   ?? 365,
           vipThreshold:        r.vipThreshold         ?? 10000,
         })
+        if (r.restaurantId) { setSyncCode(r.restaurantId); setSyncCodeEdit(r.restaurantId) }
       }
     } catch (_) { /* use defaults */ }
     finally { setLoading(false) }
@@ -220,6 +227,33 @@ export default function Settings() {
   const upd = (setter, setDirty) => (field) => (e) => {
     setter(s => ({ ...s, [field]: e.target.value }))
     setDirty(true)
+  }
+
+  function copySyncCode() {
+    if (!syncCode) return
+    navigator.clipboard.writeText(syncCode).then(() => {
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    })
+  }
+
+  function generateSyncCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    setSyncCodeEdit(code)
+  }
+
+  async function saveSyncCode() {
+    const code = syncCodeEdit.trim().toUpperCase()
+    if (!code || code.length < 4) { toast.error('Code minimum 4 characters hona chahiye'); return }
+    if (code.length > 10)         { toast.error('Code maximum 10 characters (e.g. HMB001)'); return }
+    setSavingCode(true)
+    try {
+      await api.put(`/restaurants/${restaurantId}`, { restaurantId: code })
+      setSyncCode(code)
+      toast.success('Sync code updated! Purane devices dobara link karne honge.')
+    } catch (_) { toast.error('Code save failed') }
+    finally { setSavingCode(false) }
   }
 
   const passwordsMatch  = creds.newPassword && creds.newPassword === creds.confirmPassword
@@ -286,6 +320,55 @@ export default function Settings() {
                     <Input label="UPI Display Name" value={profile.upiName}
                       onChange={upd(setProfile, setProfileDirty)('upiName')}
                       placeholder="Restaurant Name" />
+                  </div>
+                </div>
+
+                {/* Device Sync Code */}
+                <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                    📱 Device Sync Code
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    Staff ke Android device ko link karne ka code — 4–10 chars, uppercase (e.g. HMB001). Change karne ke baad purane devices dobara link karne honge.
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      value={syncCodeEdit}
+                      onChange={e => setSyncCodeEdit(e.target.value.toUpperCase())}
+                      maxLength={10}
+                      placeholder="HMB001"
+                      style={{
+                        fontFamily: 'monospace', fontSize: 18, fontWeight: 700,
+                        letterSpacing: 2, padding: '10px 14px', width: 160,
+                        background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+                        borderRadius: 8, color: 'var(--accent)', outline: 'none',
+                        textTransform: 'uppercase',
+                      }}
+                    />
+                    <button onClick={generateSyncCode} style={{
+                      padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', border: '1px solid var(--border)',
+                      background: 'var(--bg-secondary)', color: 'var(--text-muted)',
+                    }}>
+                      🎲 Generate
+                    </button>
+                    <button onClick={saveSyncCode} disabled={savingCode} style={{
+                      padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', border: 'none',
+                      background: 'var(--accent)', color: '#fff',
+                    }}>
+                      {savingCode ? '...' : '💾 Save'}
+                    </button>
+                    {syncCode && (
+                      <button onClick={copySyncCode} style={{
+                        padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                        cursor: 'pointer', border: '1px solid var(--border)',
+                        background: codeCopied ? '#22c55e' : 'var(--bg-secondary)',
+                        color: codeCopied ? '#fff' : 'var(--text-muted)',
+                      }}>
+                        {codeCopied ? '✅ Copied!' : '📋 Copy'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </>

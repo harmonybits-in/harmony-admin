@@ -306,3 +306,25 @@ export const directAggregatorApi = {
   getConfig:  (rid)       => api.get(`/direct-aggregator/${rid}/config`),
   saveConfig: (rid, body) => api.put(`/direct-aggregator/${rid}/config`, body),
 }
+
+// ── Reservations ──────────────────────────────────────────────────
+export const reservationApi = {
+  getByDate:    (date)           => api.get(`/reservations?date=${date}`),
+  getUpcoming:  (page=0,size=20) => api.get(`/reservations?page=${page}&size=${size}`),
+  getSummary:   (date)           => api.get(`/reservations/summary?date=${date}`),
+  create:       (body)           => api.post('/reservations', body),
+  update:       (id, body)       => api.put(`/reservations/${id}`, body),
+  changeStatus: (id, status)     => api.patch(`/reservations/${id}/status`, { status }),
+  cancel:       (id)             => api.delete(`/reservations/${id}`),
+}
+
+// ── General Reports ────────────────────────────────────────────────
+export const reportApi = {
+  salesSummary:    (from, to)           => api.get(`/reports/sales/summary?from=${from}&to=${to}`),
+  salesDaily:      (from, to)           => api.get(`/reports/sales/daily?from=${from}&to=${to}`),
+  salesHourly:     (from, to)           => api.get(`/reports/sales/hourly?from=${from}&to=${to}`),
+  topItems:        (from, to, limit=20) => api.get(`/reports/items?from=${from}&to=${to}&limit=${limit}`),
+  staffAttendance: (from, to)           => api.get(`/reports/staff/attendance?from=${from}&to=${to}`),
+  staffPerformance:(from, to)           => api.get(`/reports/staff/performance?from=${from}&to=${to}`),
+  pnl:             (from, to)           => api.get(`/reports/pnl?from=${from}&to=${to}`),
+}

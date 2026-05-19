@@ -19,17 +19,19 @@ const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/ws'
  * @param {number[]}  riderIds   - subscribe karne wale rider IDs
  * @param {function}  onLocation - callback({ riderId, latitude, longitude, timestamp })
  */
-export function useRiderWebSocket(riderIds, onLocation) {
+export function useRiderWebSocket(riderIds, onLocation, onConnected) {
   const token         = useAuthStore(s => s.token)
   const clientRef     = useRef(null)
   const subsRef       = useRef({})      // riderId → subscription
   const activeRef     = useRef(true)
   const riderIdsRef   = useRef(riderIds)
   const onLocationRef = useRef(onLocation)
+  const onConnectedRef = useRef(onConnected)
 
   // Always latest callback/riderIds — stale closure se bachao
-  useEffect(() => { onLocationRef.current = onLocation }, [onLocation])
-  useEffect(() => { riderIdsRef.current = riderIds },     [riderIds])
+  useEffect(() => { onLocationRef.current  = onLocation  }, [onLocation])
+  useEffect(() => { onConnectedRef.current = onConnected }, [onConnected])
+  useEffect(() => { riderIdsRef.current    = riderIds    }, [riderIds])
 
   // ── Subscribe to one rider ──────────────────────────────────────
   const subscribeRider = useCallback((riderId) => {
@@ -79,6 +81,7 @@ export function useRiderWebSocket(riderIds, onLocation) {
         if (!activeRef.current) return
         // Subscribe to all current riders
         riderIdsRef.current.forEach(id => subscribeRider(id))
+        onConnectedRef.current?.()
       },
 
       onStompError: (frame) => {

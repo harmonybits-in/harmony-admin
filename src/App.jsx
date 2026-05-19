@@ -48,6 +48,7 @@ import AuditLog             from './pages/AuditLog'
 import Expenses             from './pages/Expenses'
 import PromotionRules       from './pages/PromotionRules'
 import Refunds              from './pages/Refunds'
+import Reservations         from './pages/Reservations'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -105,6 +106,7 @@ export default function App() {
           <Route path="expenses"           element={<Expenses />} />
           <Route path="promotion-rules"    element={<PromotionRules />} />
           <Route path="refunds"            element={<Refunds />} />
+          <Route path="reservations"      element={<Reservations />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

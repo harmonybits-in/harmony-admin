@@ -109,6 +109,10 @@ export default function ChatWidget() {
   const [customerPhone, setCustomerPhone] = useState('')
   const [started, setStarted] = useState(false)
   const [confirmedOrderId, setConfirmedOrderId] = useState(null)
+  const [upiOrderId, setUpiOrderId] = useState(null)      // orderId waiting for screenshot
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false)
+  const [screenshotResult, setScreenshotResult] = useState(null)
+  const screenshotInputRef = useRef(null)
 
   const messagesEndRef = useRef(null)
 
@@ -133,6 +137,40 @@ export default function ChatWidget() {
   const accentColor = config?.widgetColor || '#e53e3e'
   const title       = config?.widgetTitle  || 'Chat with us'
 
+  async function handleScreenshotUpload(file) {
+    if (!file || !upiOrderId) return
+    setUploadingScreenshot(true)
+    const formData = new FormData()
+    formData.append('image', file)
+    try {
+      const res = await fetch(BASE + `/chatbot/${restaurantId}/orders/${upiOrderId}/upi-screenshot`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = res.ok ? await res.json() : { error: `Upload failed (${res.status})` }
+      if (data.error) throw new Error(data.error)
+      setScreenshotResult(data)
+      setUpiOrderId(null)
+      setMessages(m => [...m, {
+        role: 'ASSISTANT',
+        content: `✅ Payment screenshot received!\n\n`
+          + `**Transaction ID:** ${data.transactionId || 'N/A'}\n`
+          + `**Date/Time:** ${data.dateTime || 'N/A'}\n`
+          + `**Bank:** ${data.bank || 'N/A'}\n`
+          + `**Payer:** ${data.payerName || 'N/A'}\n`
+          + `**UPI ID:** ${data.payerUpiId || 'N/A'}\n\n`
+          + `Order will be confirmed by the restaurant shortly. 🙏`,
+      }])
+    } catch (err) {
+      setMessages(m => [...m, {
+        role: 'ASSISTANT',
+        content: '⚠️ Screenshot upload failed: ' + (err.message || 'Please try again.'),
+      }])
+    } finally {
+      setUploadingScreenshot(false)
+    }
+  }
+
   async function handleSend(e) {
     e.preventDefault()
     if (!input.trim() || sending) return
@@ -152,7 +190,12 @@ export default function ChatWidget() {
       })
       const reply = res?.reply || res?.message || res?.content || 'Sorry, something went wrong.'
       setMessages(m => [...m, { role: 'ASSISTANT', content: reply }])
-      if (res?.orderId) setConfirmedOrderId(res.orderId)
+      if (res?.orderId) {
+        setConfirmedOrderId(res.orderId)
+        if (res?.paymentMode?.toUpperCase() === 'UPI') {
+          setUpiOrderId(res.orderId)
+        }
+      }
     } catch (err) {
       setMessages(m => [...m, {
         role: 'ASSISTANT',
@@ -392,14 +435,59 @@ export default function ChatWidget() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 22 }}>✅</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: '#15803d' }}>Order Confirmed!</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#15803d' }}>Order Placed!</span>
             </div>
             <div style={{ fontSize: 13, color: '#166534' }}>
               Order ID: <strong>#{confirmedOrderId}</strong>
             </div>
-            <div style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: '#16a34a', marginTop: 4 }}>
               WhatsApp confirmation aapke number pe bheja ja raha hai.
             </div>
+          </div>
+        )}
+
+        {upiOrderId && !screenshotResult && (
+          <div style={{
+            margin: '8px 0 12px', padding: '16px', borderRadius: 14,
+            background: 'linear-gradient(135deg, #fefce8, #fef9c3)',
+            border: '1.5px solid #fde047',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 20 }}>📸</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#854d0e' }}>Upload Payment Screenshot</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#713f12', marginBottom: 12, lineHeight: 1.5 }}>
+              UPI payment screenshot upload karein taaki restaurant verify karke order confirm kare.
+            </div>
+            <input
+              ref={screenshotInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (f) handleScreenshotUpload(f)
+                e.target.value = ''
+              }}
+            />
+            <button
+              onClick={() => screenshotInputRef.current?.click()}
+              disabled={uploadingScreenshot}
+              style={{
+                width: '100%', padding: '11px', borderRadius: 10, border: 'none',
+                background: uploadingScreenshot ? '#e0e0e0' : '#eab308',
+                color: uploadingScreenshot ? '#999' : '#fff',
+                fontSize: 14, fontWeight: 700,
+                cursor: uploadingScreenshot ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {uploadingScreenshot ? (
+                <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span> Analyzing…</>
+              ) : (
+                <><span>📤</span> Upload Screenshot</>
+              )}
+            </button>
           </div>
         )}
 
