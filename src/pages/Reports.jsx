@@ -5,6 +5,7 @@ import {
   LineChart, Line, CartesianGrid, PieChart, Pie, Cell,
 } from 'recharts'
 import { reportApi } from '../api/client'
+import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import { SkeletonCard } from '../components/Skeleton'
 
@@ -51,7 +52,8 @@ export default function Reports() {
   const [to,   setTo]   = useState(today())
   const [tab,  setTab]  = useState('Sales')
   const [loading, setLoading] = useState(true)
-  const [exporting, setExporting] = useState(false)
+  const [exporting,      setExporting]      = useState(false)
+  const [tallyExporting, setTallyExporting] = useState(false)
 
   const [summary,     setSummary]     = useState(null)
   const [daily,       setDaily]       = useState([])
@@ -87,6 +89,25 @@ export default function Reports() {
 
   useEffect(() => { load() }, [load])
 
+  async function exportTally() {
+    setTallyExporting(true)
+    try {
+      const { token, restaurantId } = useAuthStore.getState()
+      const BASE = import.meta.env.VITE_API_URL || 'http://localhost:2026'
+      const res = await fetch(`${BASE}/api/v1/reports/tally-export?from=${from}&to=${to}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = `tally-export-${from}-to-${to}.xml`; a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Tally XML downloaded!')
+    } catch { toast.error('Tally export failed') }
+    finally { setTallyExporting(false) }
+  }
+
   function exportCSV() {
     setExporting(true)
     try {
@@ -119,14 +140,24 @@ export default function Reports() {
             Sales · Items · Staff · P&L — date range ke saath
           </p>
         </div>
-        <button onClick={exportCSV} disabled={exporting || daily.length === 0} style={{
-          padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-          background: '#10b981', color: '#fff', border: 'none',
-          cursor: exporting || daily.length === 0 ? 'not-allowed' : 'pointer',
-          opacity: exporting || daily.length === 0 ? 0.6 : 1,
-        }}>
-          {exporting ? 'Exporting…' : '📥 Export CSV'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportTally} disabled={tallyExporting} style={{
+            padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            background: '#4f46e5', color: '#fff', border: 'none',
+            cursor: tallyExporting ? 'not-allowed' : 'pointer',
+            opacity: tallyExporting ? 0.6 : 1,
+          }}>
+            {tallyExporting ? 'Exporting…' : '📒 Tally Export'}
+          </button>
+          <button onClick={exportCSV} disabled={exporting || daily.length === 0} style={{
+            padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            background: '#10b981', color: '#fff', border: 'none',
+            cursor: exporting || daily.length === 0 ? 'not-allowed' : 'pointer',
+            opacity: exporting || daily.length === 0 ? 0.6 : 1,
+          }}>
+            {exporting ? 'Exporting…' : '📥 Export CSV'}
+          </button>
+        </div>
       </div>
 
       {/* Date filters */}
