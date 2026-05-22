@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import { SkeletonLine } from '../components/Skeleton'
 
-const TABS = ['🏪 Business Profile', '🔑 Login Credentials', '📜 Legal', '⭐ Loyalty & VIP', '🕐 Business Hours']
+const TABS = ['🏪 Business Profile', '🔑 Login Credentials', '📜 Legal', '⭐ Loyalty & VIP', '🕐 Business Hours', '🔗 ONDC']
 
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const DAY_SHORT = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun' }
@@ -153,7 +153,12 @@ export default function Settings() {
   const [restaurantCode, setRestaurantCode] = useState('')
   const [storeLinkCopied, setStoreLinkCopied] = useState(false)
 
-  useEffect(() => { loadRestaurant() }, [])
+  // ── ONDC ──
+  const [ondc, setOndc] = useState({ subscriberId: '', bppId: '', bppUri: '', uniqueKeyId: '', enabled: false })
+  const [ondcDirty, setOndcDirty] = useState(false)
+  const [ondcSaving, setOndcSaving] = useState(false)
+
+  useEffect(() => { loadRestaurant(); loadOndcConfig() }, [])
 
   async function loadRestaurant() {
     setLoading(true)
@@ -195,6 +200,23 @@ export default function Settings() {
       }
     } catch (_) { /* use defaults */ }
     finally { setLoading(false) }
+  }
+
+  async function loadOndcConfig() {
+    try {
+      const r = await api.get('/ondc/admin/config')
+      if (r) setOndc({ subscriberId: r.subscriberId || '', bppId: r.bppId || '', bppUri: r.bppUri || '', uniqueKeyId: r.uniqueKeyId || '', enabled: r.enabled || false })
+    } catch (_) { /* use defaults */ }
+  }
+
+  async function saveOndcConfig() {
+    setOndcSaving(true)
+    try {
+      await api.post('/ondc/admin/config', ondc)
+      toast.success('ONDC config saved!')
+      setOndcDirty(false)
+    } catch (_) { toast.error('ONDC save failed') }
+    finally { setOndcSaving(false) }
   }
 
   async function saveSection(data, setDirty) {
@@ -637,6 +659,68 @@ export default function Settings() {
               </>
             )}
         </Section>
+      )}
+
+      {/* ── Tab 5: ONDC ── */}
+      {tab === 5 && (
+        <div>
+          <div style={{ background: 'linear-gradient(135deg, #f0fdf4, #fff)', border: '1.5px solid #bbf7d0',
+            borderRadius: 16, padding: '20px 24px', marginBottom: 24 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#111', marginBottom: 6 }}>
+              🔗 ONDC — Open Network for Digital Commerce
+            </div>
+            <div style={{ fontSize: 13, color: '#555', lineHeight: 1.7 }}>
+              Government ka free digital commerce network. Customers Paytm, PhonePe, ONDC apps se aapke restaurant pe order kar sakte hain — bina commission ke.
+            </div>
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ background: '#dcfce7', color: '#16a34a', fontSize: 11, fontWeight: 700,
+                padding: '3px 10px', borderRadius: 20 }}>✓ Zero Commission</span>
+              <span style={{ background: '#dbeafe', color: '#1d4ed8', fontSize: 11, fontWeight: 700,
+                padding: '3px 10px', borderRadius: 20 }}>✓ Government Backed</span>
+              <span style={{ background: '#fef9c3', color: '#854d0e', fontSize: 11, fontWeight: 700,
+                padding: '3px 10px', borderRadius: 20 }}>⏳ Registration Required</span>
+            </div>
+          </div>
+
+          <Section title="ONDC Network Config" dirty={ondcDirty} saving={ondcSaving} onSave={saveOndcConfig}>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <div style={{ position: 'relative', width: 44, height: 24, borderRadius: 12,
+                  background: ondc.enabled ? '#16a34a' : '#d1d5db', transition: 'background .2s' }}
+                  onClick={() => { setOndc(o => ({ ...o, enabled: !o.enabled })); setOndcDirty(true) }}>
+                  <div style={{ position: 'absolute', top: 3, left: ondc.enabled ? 22 : 3, width: 18, height: 18,
+                    borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+                </div>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#111' }}>
+                  {ondc.enabled ? 'ONDC Enabled ✓' : 'ONDC Disabled'}
+                </span>
+              </label>
+            </div>
+            <Input label="Subscriber ID" value={ondc.subscriberId} placeholder="e.g. yourrestaurant.harmonybits.in"
+              hint="ONDC se registration ke baad milega"
+              onChange={e => { setOndc(o => ({ ...o, subscriberId: e.target.value })); setOndcDirty(true) }} />
+            <Input label="BPP ID" value={ondc.bppId} placeholder="e.g. yourrestaurant.harmonybits.in"
+              onChange={e => { setOndc(o => ({ ...o, bppId: e.target.value })); setOndcDirty(true) }} />
+            <Input label="BPP URI" value={ondc.bppUri} placeholder="https://api.harmonybits.in/api/v1/ondc"
+              hint="Yahi URL ONDC Gateway pe register karni hogi"
+              onChange={e => { setOndc(o => ({ ...o, bppUri: e.target.value })); setOndcDirty(true) }} />
+            <Input label="Unique Key ID" value={ondc.uniqueKeyId} placeholder="Ed25519 signing key ID"
+              hint="ONDC registration ke baad milega"
+              onChange={e => { setOndc(o => ({ ...o, uniqueKeyId: e.target.value })); setOndcDirty(true) }} />
+
+            <div style={{ marginTop: 20, padding: 16, background: '#fafafa', borderRadius: 12,
+              border: '1px solid #e5e7eb', fontSize: 13, color: '#555' }}>
+              <div style={{ fontWeight: 700, color: '#111', marginBottom: 8 }}>Registration Steps:</div>
+              <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 2 }}>
+                <li>ondcnetwork.org pe Network Participant apply karo</li>
+                <li>BPP URL: <code style={{ background: '#f3f4f6', padding: '1px 6px', borderRadius: 4 }}>https://api.harmonybits.in/api/v1/ondc</code></li>
+                <li>Ed25519 key pair generate karo, public key ONDC ko do</li>
+                <li>Staging test pass karo → Production approval</li>
+                <li>Subscriber ID + Key ID yahan fill karo aur Enable karo</li>
+              </ol>
+            </div>
+          </Section>
+        </div>
       )}
     </div>
   )
