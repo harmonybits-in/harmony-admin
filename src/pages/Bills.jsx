@@ -133,6 +133,11 @@ function BillDetailModal({ billId, restaurant, onClose }) {
   const [irnLoading,   setIrnLoading]   = useState(false)
   const [buyerGstin,   setBuyerGstin]   = useState('')
   const [eInvoice,     setEInvoice]     = useState(null)
+  const [mode,         setMode]         = useState('view') // 'view' | 'split' | 'merge'
+  const [splitItems,   setSplitItems]   = useState([])     // selected item ids for split
+  const [splitTable,   setSplitTable]   = useState('')
+  const [mergeBillId,  setMergeBillId]  = useState('')
+  const [actionLoading,setActionLoading]= useState(false)
 
   async function handleSendWhatsApp() {
     setSending(true)
@@ -175,6 +180,64 @@ function BillDetailModal({ billId, restaurant, onClose }) {
       toast.error(e.message || 'IRN generation failed')
     } finally {
       setIrnLoading(false)
+    }
+  }
+
+  async function handleSplit() {
+    if (splitItems.length === 0) { toast.error('Koi item select nahi kiya'); return }
+    if (splitItems.length === (bill.items || []).length) {
+      toast.error('Saare items split nahi kar sakte')
+      return
+    }
+    setActionLoading(true)
+    try {
+      const { token } = useAuthStore.getState()
+      const BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${BASE}/api/v1/bills/${billId}/split`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ itemIds: splitItems, newTableNumber: splitTable ? parseInt(splitTable) : null }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'Split nahi hua')
+      }
+      const result = await res.json()
+      toast.success(`Bill split ho gaya! New Bill: #${result.newBill?.billNumber || ''}`)
+      setBill(result.originalBill)
+      setMode('view')
+      setSplitItems([])
+    } catch (e) {
+      toast.error(e.message || 'Split failed')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleMerge() {
+    if (!mergeBillId.trim()) { toast.error('Source Bill ID enter karo'); return }
+    setActionLoading(true)
+    try {
+      const { token } = useAuthStore.getState()
+      const BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${BASE}/api/v1/bills/${billId}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sourceBillId: parseInt(mergeBillId) }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'Merge nahi hua')
+      }
+      const merged = await res.json()
+      toast.success('Bills merge ho gaye! ✅')
+      setBill(merged)
+      setMode('view')
+      setMergeBillId('')
+    } catch (e) {
+      toast.error(e.message || 'Merge failed')
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -238,7 +301,7 @@ function BillDetailModal({ billId, restaurant, onClose }) {
               {fmtDate(bill.createdAt)}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => printReceipt(bill, restaurant)} style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
               background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
@@ -250,6 +313,18 @@ function BillDetailModal({ billId, restaurant, onClose }) {
                 border: 'none', cursor: sending ? 'not-allowed' : 'pointer',
               }}>{sending ? '⏳ Sending...' : '📲 WhatsApp'}</button>
             )}
+            <button onClick={() => setMode(mode === 'split' ? 'view' : 'split')} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: mode === 'split' ? '#f59e0b' : 'var(--bg-secondary)',
+              color: mode === 'split' ? '#fff' : 'var(--text)',
+              border: '1px solid var(--border)', cursor: 'pointer',
+            }}>✂️ Split</button>
+            <button onClick={() => setMode(mode === 'merge' ? 'view' : 'merge')} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: mode === 'merge' ? '#6366f1' : 'var(--bg-secondary)',
+              color: mode === 'merge' ? '#fff' : 'var(--text)',
+              border: '1px solid var(--border)', cursor: 'pointer',
+            }}>⊞ Merge</button>
             <button onClick={onClose} style={{ background: 'none', border: 'none',
               fontSize: 24, cursor: 'pointer', color: 'var(--text-muted)', lineHeight: 1,
               padding: '0 4px' }}>×</button>
@@ -354,6 +429,91 @@ function BillDetailModal({ billId, restaurant, onClose }) {
             padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)',
             marginBottom: '1.25rem' }}>
             📝 {bill.notes}
+          </div>
+        )}
+
+        {/* ── SPLIT PANEL ── */}
+        {mode === 'split' && (
+          <div style={{ border: '2px solid #f59e0b', borderRadius: 10,
+            padding: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b',
+              letterSpacing: '0.06em', marginBottom: 10 }}>
+              ✂️ SPLIT BILL — items select karo jo naye table pe jaenge
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+              {(bill.items || []).map(it => {
+                const checked = splitItems.includes(it.id)
+                return (
+                  <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '6px 10px', borderRadius: 7, cursor: 'pointer',
+                    background: checked ? '#f59e0b22' : 'var(--bg-secondary)',
+                    border: `1px solid ${checked ? '#f59e0b' : 'var(--border)'}`,
+                    fontSize: 13 }}>
+                    <input type="checkbox" checked={checked}
+                      onChange={() => setSplitItems(prev =>
+                        checked ? prev.filter(x => x !== it.id) : [...prev, it.id]
+                      )} style={{ accentColor: '#f59e0b' }} />
+                    <span style={{ flex: 1 }}>{it.product?.name || '—'}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                      {it.quantity} × {fmt(it.price)}
+                    </span>
+                    <span style={{ fontWeight: 600 }}>{fmt(it.total || (it.quantity * it.price))}</span>
+                  </label>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="number" placeholder="Naya Table # (optional)"
+                value={splitTable} onChange={e => setSplitTable(e.target.value)}
+                style={{ padding: '7px 10px', borderRadius: 7, width: 180,
+                  border: '1px solid var(--border)', background: 'var(--bg-card)',
+                  color: 'var(--text)', fontSize: 12 }} />
+              <button onClick={handleSplit} disabled={actionLoading || splitItems.length === 0}
+                style={{ padding: '7px 18px', borderRadius: 7, border: 'none',
+                  background: actionLoading || splitItems.length === 0 ? '#ccc' : '#f59e0b',
+                  color: '#fff', fontSize: 12, fontWeight: 600,
+                  cursor: actionLoading || splitItems.length === 0 ? 'not-allowed' : 'pointer' }}>
+                {actionLoading ? '⏳...' : `✂️ Split ${splitItems.length} item${splitItems.length !== 1 ? 's' : ''}`}
+              </button>
+              <button onClick={() => { setMode('view'); setSplitItems([]); setSplitTable('') }}
+                style={{ padding: '7px 12px', borderRadius: 7, border: '1px solid var(--border)',
+                  background: 'none', fontSize: 12, cursor: 'pointer', color: 'var(--text-muted)' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── MERGE PANEL ── */}
+        {mode === 'merge' && (
+          <div style={{ border: '2px solid #6366f1', borderRadius: 10,
+            padding: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#6366f1',
+              letterSpacing: '0.06em', marginBottom: 8 }}>
+              ⊞ MERGE INTO THIS BILL — dusre bill ke saare items yahan aa jaenge
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Source bill ka ID enter karo. Woh bill delete ho jaega, uske items is bill mein add honge.
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="number" placeholder="Source Bill ID"
+                value={mergeBillId} onChange={e => setMergeBillId(e.target.value)}
+                style={{ padding: '7px 10px', borderRadius: 7, width: 160,
+                  border: '1px solid #6366f1', background: 'var(--bg-card)',
+                  color: 'var(--text)', fontSize: 12 }} />
+              <button onClick={handleMerge} disabled={actionLoading || !mergeBillId.trim()}
+                style={{ padding: '7px 18px', borderRadius: 7, border: 'none',
+                  background: actionLoading || !mergeBillId.trim() ? '#ccc' : '#6366f1',
+                  color: '#fff', fontSize: 12, fontWeight: 600,
+                  cursor: actionLoading || !mergeBillId.trim() ? 'not-allowed' : 'pointer' }}>
+                {actionLoading ? '⏳...' : '⊞ Merge Bills'}
+              </button>
+              <button onClick={() => { setMode('view'); setMergeBillId('') }}
+                style={{ padding: '7px 12px', borderRadius: 7, border: '1px solid var(--border)',
+                  background: 'none', fontSize: 12, cursor: 'pointer', color: 'var(--text-muted)' }}>
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
