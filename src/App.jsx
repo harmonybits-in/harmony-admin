@@ -74,6 +74,10 @@ import MenuEngineering     from './pages/MenuEngineering'
 import QrPaymentConfig     from './pages/QrPaymentConfig'
 import PushNotifications   from './pages/PushNotifications'
 import StaffPerformance    from './pages/StaffPerformance'
+import ReviewManagement    from './pages/ReviewManagement'
+import PredictiveAnalytics from './pages/PredictiveAnalytics'
+import Marketplace         from './pages/Marketplace'
+import SelfOrderingKiosk  from './pages/SelfOrderingKiosk'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -91,6 +95,7 @@ export default function App() {
         <Route path="/cfd/:restaurantId"             element={<CustomerFacingDisplay />} />
         <Route path="/qr/:restaurantId/t/:tableId"   element={<QrOrder />} />
         <Route path="/qr/:restaurantId"              element={<QrOrder />} />
+        <Route path="/kiosk/:restaurantId"           element={<SelfOrderingKiosk />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index            element={<Dashboard />} />
           <Route path="bills"     element={<Bills />} />
@@ -158,7 +163,10 @@ export default function App() {
           <Route path="menu-engineering"    element={<MenuEngineering />} />
           <Route path="qr-payment-config"   element={<QrPaymentConfig />} />
           <Route path="push-notifications"  element={<PushNotifications />} />
-          <Route path="staff-performance"   element={<StaffPerformance />} />
+          <Route path="staff-performance"      element={<StaffPerformance />} />
+          <Route path="review-management"      element={<ReviewManagement />} />
+          <Route path="predictive-analytics"   element={<PredictiveAnalytics />} />
+          <Route path="marketplace"            element={<Marketplace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

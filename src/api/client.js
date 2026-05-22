@@ -485,3 +485,20 @@ export const reportsExtApi = {
   menuEngineering: (from, to) => api.get(`/reports/menu-engineering?from=${from}&to=${to}`),
   staffPerformance:(from, to) => api.get(`/reports/staff/performance?from=${from}&to=${to}`),
 }
+
+// ── Review Management ─────────────────────────────────────────────
+export const reviewApi = {
+  list:     (platform, rating) => api.get(`/reviews${platform ? `?platform=${platform}` : ''}${rating ? `${platform ? '&' : '?'}rating=${rating}` : ''}`),
+  add:      (body)             => api.post('/reviews', body),
+  reply:    (id, reply)        => api.put(`/reviews/${id}/reply`, { reply }),
+  delete:   (id)               => api.delete(`/reviews/${id}`),
+  stats:    ()                 => api.get('/reviews/stats'),
+  sync:     (platform)         => api.post(`/reviews/sync/${platform}`),
+}
+
+// ── Predictive Analytics ──────────────────────────────────────────
+export const predictiveApi = {
+  sales:         (days = 7) => api.get(`/analytics/predictions/sales?days=${days}`),
+  busyHours:     ()         => api.get('/analytics/predictions/busy-hours'),
+  inventoryRisk: ()         => api.get('/analytics/predictions/inventory-risk'),
+}
