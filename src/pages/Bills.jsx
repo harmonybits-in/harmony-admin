@@ -127,9 +127,12 @@ ${bill.notes ? `<div style="font-size:11px;margin-top:4px;color:#555">Note: ${bi
 // ── Bill Detail Modal ─────────────────────────────────────────────────────
 function BillDetailModal({ billId, restaurant, onClose }) {
   const toast = useToast()
-  const [bill,    setBill]    = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
+  const [bill,         setBill]         = useState(null)
+  const [loading,      setLoading]      = useState(true)
+  const [sending,      setSending]      = useState(false)
+  const [irnLoading,   setIrnLoading]   = useState(false)
+  const [buyerGstin,   setBuyerGstin]   = useState('')
+  const [eInvoice,     setEInvoice]     = useState(null)
 
   async function handleSendWhatsApp() {
     setSending(true)
@@ -143,9 +146,47 @@ function BillDetailModal({ billId, restaurant, onClose }) {
     }
   }
 
+  async function handleGenerateIrn() {
+    if (!restaurant?.gstNumber) {
+      toast.error('Settings mein restaurant GSTIN pehle fill karo')
+      return
+    }
+    setIrnLoading(true)
+    try {
+      const { token } = useAuthStore.getState()
+      const BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${BASE}/api/v1/bills/${billId}/e-invoice/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ buyerGstin: buyerGstin.trim().toUpperCase() || null }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'IRN generate nahi hua')
+      }
+      const updated = await res.json()
+      setBill(updated)
+      setEInvoice({
+        irn: updated.irn, ackNo: updated.ackNo, ackDate: updated.ackDate,
+        buyerGstin: updated.buyerGstin, eInvoiceQr: updated.eInvoiceQr, generated: true,
+      })
+      toast.success('IRN generate ho gaya! ✅')
+    } catch (e) {
+      toast.error(e.message || 'IRN generation failed')
+    } finally {
+      setIrnLoading(false)
+    }
+  }
+
   useEffect(() => {
     billApi.getById(billId)
-      .then(setBill)
+      .then(b => {
+        setBill(b)
+        if (b.irn) {
+          setEInvoice({ irn: b.irn, ackNo: b.ackNo, ackDate: b.ackDate,
+            buyerGstin: b.buyerGstin, eInvoiceQr: b.eInvoiceQr, generated: true })
+        }
+      })
       .catch(() => { toast.error('Bill load nahi hua'); onClose() })
       .finally(() => setLoading(false))
   }, [billId])
@@ -310,10 +351,89 @@ function BillDetailModal({ billId, restaurant, onClose }) {
         {/* Notes */}
         {bill.notes && (
           <div style={{ background: 'var(--bg-secondary)', borderRadius: 8,
-            padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+            padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)',
+            marginBottom: '1.25rem' }}>
             📝 {bill.notes}
           </div>
         )}
+
+        {/* E-Invoice / IRN */}
+        <div style={{ border: '1px solid var(--border)', borderRadius: 10,
+          padding: '1rem', marginTop: bill.notes ? 0 : '1.25rem' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)',
+            letterSpacing: '0.06em', marginBottom: 10 }}>
+            🧾 E-INVOICE (IRN)
+          </div>
+
+          {eInvoice?.generated ? (
+            <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ color: 'var(--text-muted)', minWidth: 80 }}>IRN</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 10, wordBreak: 'break-all',
+                    color: 'var(--text)', background: 'var(--bg-secondary)',
+                    padding: '3px 6px', borderRadius: 4 }}>
+                    {eInvoice.irn}
+                  </span>
+                  <button onClick={() => { navigator.clipboard.writeText(eInvoice.irn); toast.success('IRN copied!') }}
+                    style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)',
+                      background: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--text-muted)',
+                      flexShrink: 0 }}>Copy</button>
+                </div>
+                {eInvoice.ackNo && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)', minWidth: 80 }}>Ack No</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{eInvoice.ackNo}</span>
+                  </div>
+                )}
+                {eInvoice.ackDate && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)', minWidth: 80 }}>Ack Date</span>
+                    <span style={{ fontSize: 11 }}>{new Date(eInvoice.ackDate).toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                {eInvoice.buyerGstin && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)', minWidth: 80 }}>Buyer GSTIN</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{eInvoice.buyerGstin}</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ marginTop: 10, padding: '8px 10px', background: '#10b98120',
+                borderRadius: 6, fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                ✅ IRN Generated — Valid for GST compliance
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                B2B invoices ₹5 lakh+ ke liye IRN mandatory hai (GSTN mandate).
+                Seller GSTIN Settings mein set karo.
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="Buyer GSTIN (optional)"
+                  value={buyerGstin}
+                  onChange={e => setBuyerGstin(e.target.value.toUpperCase())}
+                  maxLength={15}
+                  style={{ padding: '7px 10px', borderRadius: 7,
+                    border: '1px solid var(--border)', background: 'var(--bg-card)',
+                    color: 'var(--text)', fontSize: 12, width: 200, fontFamily: 'monospace' }}
+                />
+                <button
+                  onClick={handleGenerateIrn}
+                  disabled={irnLoading}
+                  style={{ padding: '7px 16px', borderRadius: 7, border: 'none',
+                    background: irnLoading ? '#ccc' : '#7c3aed',
+                    color: '#fff', fontSize: 12, fontWeight: 600,
+                    cursor: irnLoading ? 'not-allowed' : 'pointer' }}>
+                  {irnLoading ? '⏳ Generating...' : '🧾 Generate IRN'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
