@@ -31,6 +31,8 @@ function CategoryModal({ modal, onClose, onSaved, toast, rid }) {
     rank:              isAdd ? '' : String(modal.rank || ''),
     logoUrl:           isAdd ? '' : (modal.logoUrl || ''),
     isActive:          isAdd ? true : (modal.isActive ?? true),
+    availableFrom:     isAdd ? '' : (modal.availableFrom || ''),
+    availableTo:       isAdd ? '' : (modal.availableTo   || ''),
   }))
   const [saving, setSaving] = useState(false)
 
@@ -46,7 +48,13 @@ function CategoryModal({ modal, onClose, onSaved, toast, rid }) {
     if (!form.name.trim()) { toast.error('Category name dalo'); return }
     setSaving(true)
     try {
-      const body = { ...form, restaurantId: rid, rank: Number(form.rank) || 0 }
+      const body = {
+        ...form,
+        restaurantId: rid,
+        rank: Number(form.rank) || 0,
+        availableFrom: form.availableFrom || null,
+        availableTo:   form.availableTo   || null,
+      }
       if (isAdd) {
         await api.post('/categories', body)
         toast.success('Category added!')
@@ -107,6 +115,32 @@ function CategoryModal({ modal, onClose, onSaved, toast, rid }) {
                 border: '1px solid var(--border)' }}
               onError={e => { e.target.style.display = 'none' }} />
           )}
+
+          {/* Time-based scheduling */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)',
+              letterSpacing: '0.06em', marginBottom: 8 }}>⏰ TIME SCHEDULE (optional)</div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Khali chhodo = hamesha available. Set karo to sirf us time window mein dikhega.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Available From">
+                <input type="time" value={form.availableFrom} onChange={set('availableFrom')}
+                  style={iStyle} />
+              </Field>
+              <Field label="Available To">
+                <input type="time" value={form.availableTo} onChange={set('availableTo')}
+                  style={iStyle} />
+              </Field>
+            </div>
+            {form.availableFrom && form.availableTo && (
+              <div style={{ marginTop: 8, fontSize: 11, padding: '6px 10px',
+                background: 'var(--accent-bg)', borderRadius: 6, color: 'var(--accent)' }}>
+                ⏰ Sirf {form.availableFrom} – {form.availableTo} ke beech dikhega
+                {form.availableFrom > form.availableTo ? ' (overnight)' : ''}
+              </div>
+            )}
+          </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
             <input type="checkbox" checked={form.isActive} onChange={set('isActive')}
@@ -246,7 +280,7 @@ export default function MenuCategories() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
-                  {['Rank', 'Category', 'Online Name', 'Status', 'Actions'].map(h => (
+                  {['Rank', 'Category', 'Online Name', '⏰ Schedule', 'Status', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 600,
                       fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
@@ -285,6 +319,19 @@ export default function MenuCategories() {
                     <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>
                       {c.onlineDisplayName && c.onlineDisplayName !== c.name
                         ? c.onlineDisplayName : '—'}
+                    </td>
+
+                    {/* Schedule */}
+                    <td style={{ padding: '12px 16px' }}>
+                      {c.availableFrom && c.availableTo ? (
+                        <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 20,
+                          background: '#6366f122', color: '#6366f1', fontWeight: 600,
+                          whiteSpace: 'nowrap' }}>
+                          ⏰ {c.availableFrom}–{c.availableTo}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Always</span>
+                      )}
                     </td>
 
                     {/* Status toggle */}
