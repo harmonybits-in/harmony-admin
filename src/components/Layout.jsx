@@ -62,6 +62,7 @@ const NAV_GROUPS = [
     key: 'menu', label: 'Menu',
     items: [
       { to: '/menu',            icon: '🍽️', label: 'Menu Items'       },
+      { to: '/item-86',         icon: '🔴', label: 'Item 86'           },
       { to: '/menu-categories', icon: '📋', label: 'Categories'        },
       { to: '/menu-config',     icon: '🍕', label: 'Addons & Variants' },
       { to: '/promotions',    icon: '🎁', label: 'Promotions'        },
