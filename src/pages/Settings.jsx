@@ -149,6 +149,10 @@ export default function Settings() {
   const [codeCopied, setCodeCopied] = useState(false)
   const [savingCode, setSavingCode] = useState(false)
 
+  // ── White-Label Store ──
+  const [restaurantCode, setRestaurantCode] = useState('')
+  const [storeLinkCopied, setStoreLinkCopied] = useState(false)
+
   useEffect(() => { loadRestaurant() }, [])
 
   async function loadRestaurant() {
@@ -187,6 +191,7 @@ export default function Settings() {
           vipThreshold:        r.vipThreshold         ?? 10000,
         })
         if (r.restaurantId) { setSyncCode(r.restaurantId); setSyncCodeEdit(r.restaurantId) }
+        if (r.restaurantCode) setRestaurantCode(r.restaurantCode)
       }
     } catch (_) { /* use defaults */ }
     finally { setLoading(false) }
@@ -280,6 +285,42 @@ export default function Settings() {
           }}>{t}</button>
         ))}
       </div>
+
+      {/* ── Your Online Store Card ── */}
+      {restaurantCode && (
+        <div style={{ background: 'linear-gradient(135deg, #fff7ed, #fff)',
+          border: '1.5px solid #fed7aa', borderRadius: 16, padding: '20px 24px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 22 }}>🌐</span>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: '#111' }}>Your Online Store</div>
+              <div style={{ fontSize: 12, color: '#888' }}>Share this URL with your customers</div>
+            </div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+            padding: '10px 14px', fontSize: 13, fontFamily: 'monospace', color: '#f97316',
+            wordBreak: 'break-all', marginBottom: 12 }}>
+            https://zippli.in/store/{restaurantCode}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => {
+              navigator.clipboard.writeText(`https://zippli.in/store/${restaurantCode}`)
+              setStoreLinkCopied(true)
+              setTimeout(() => setStoreLinkCopied(false), 2000)
+            }} style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+              border: '1.5px solid #f97316', background: storeLinkCopied ? '#f97316' : '#fff',
+              color: storeLinkCopied ? '#fff' : '#f97316', cursor: 'pointer', transition: 'all .2s' }}>
+              {storeLinkCopied ? '✓ Copied!' : 'Copy Link'}
+            </button>
+            <a href={`https://zippli.in/store/${restaurantCode}`} target="_blank" rel="noreferrer"
+              style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+                border: '1.5px solid #e5e7eb', background: '#fff', color: '#555',
+                cursor: 'pointer', textDecoration: 'none' }}>
+              Open ↗
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ── Tab 0: Business Profile ── */}
       {tab === 0 && (
