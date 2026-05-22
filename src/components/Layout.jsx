@@ -45,8 +45,10 @@ const NAV_GROUPS = [
     items: [
       { to: '/bills',         icon: '🧾', label: 'Bills'           },
       { to: '/online-orders', icon: '📱', label: 'Online Orders'   },
-      { to: '/delivery',      icon: '🛵', label: 'Delivery Orders' },
-      { to: '/due-payments',  icon: '💳', label: 'Due Payments'    },
+      { to: '/delivery',        icon: '🛵', label: 'Delivery Orders' },
+      { to: '/delivery-zones',  icon: '📍', label: 'Delivery Zones'  },
+      { to: '/pre-orders',      icon: '📅', label: 'Pre-Orders'       },
+      { to: '/due-payments',    icon: '💳', label: 'Due Payments'     },
     ],
   },
   {
@@ -55,7 +57,9 @@ const NAV_GROUPS = [
       { to: '/customers', icon: '👥', label: 'Customers'     },
       { to: '/loyalty',   icon: '⭐', label: 'Loyalty Points'},
       { to: '/feedback',  icon: '💬', label: 'Feedback'      },
-      { to: '/chatbot',   icon: '🤖', label: 'Chatbot', badge: 'chatbot' },
+      { to: '/chatbot',       icon: '🤖', label: 'Chatbot',        badge: 'chatbot' },
+      { to: '/sms-marketing', icon: '📨', label: 'SMS Marketing' },
+      { to: '/gift-cards',    icon: '🎁', label: 'Gift Cards'    },
     ],
   },
   {
@@ -77,6 +81,7 @@ const NAV_GROUPS = [
     key: 'staff', label: 'Staff',
     items: [
       { to: '/staff',          icon: '👤', label: 'Staff'           },
+      { to: '/roster',         icon: '📅', label: 'Roster'          },
       { to: '/attendance',     icon: '📋', label: 'Attendance'      },
       { to: '/qr-attendance',  icon: '📲', label: 'QR Attendance'   },
       { to: '/payroll',        icon: '💰', label: 'Payroll'         },
@@ -102,8 +107,10 @@ const NAV_GROUPS = [
   {
     key: 'analytics', label: 'Analytics',
     items: [
-      { to: '/reports',     icon: '📊', label: 'Reports'     },
-      { to: '/gst-reports', icon: '🧾', label: 'GST Reports' },
+      { to: '/reports',          icon: '📊', label: 'Reports'         },
+      { to: '/gst-reports',     icon: '🧾', label: 'GST Reports'     },
+      { to: '/pnl-report',      icon: '📈', label: 'P&L Statement'   },
+      { to: '/food-cost-report', icon: '🍳', label: 'Food Cost %'    },
     ],
   },
   {
@@ -126,6 +133,8 @@ const NAV_GROUPS = [
       { to: '/referrals',         icon: '🎁', label: 'Referrals'         },
       { to: '/service-agreement', icon: '📄', label: 'Service Agreement' },
       { to: '/audit-log',         icon: '🔍', label: 'Audit Log'         },
+      { to: '/franchise-royalty',         icon: '🏢', label: 'Franchise Royalty'         },
+      { to: '/aggregator-reconciliation', icon: '🔁', label: 'Aggregator Reconciliation' },
     ],
   },
 ]

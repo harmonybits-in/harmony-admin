@@ -64,6 +64,16 @@ import OndcConfig        from './pages/OndcConfig'
 import EdcTerminals      from './pages/EdcTerminals'
 import MenuSync          from './pages/MenuSync'
 import CustomerSegments  from './pages/CustomerSegments'
+import KotPrinterConfig from './pages/KotPrinterConfig'
+import StockTransfer    from './pages/StockTransfer'
+import StockAudit       from './pages/StockAudit'
+import DeliveryZones    from './pages/DeliveryZones'
+import PreOrders        from './pages/PreOrders'
+import CashFlowReport      from './pages/CashFlowReport'
+import MenuEngineering     from './pages/MenuEngineering'
+import QrPaymentConfig     from './pages/QrPaymentConfig'
+import PushNotifications   from './pages/PushNotifications'
+import StaffPerformance    from './pages/StaffPerformance'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -139,6 +149,16 @@ export default function App() {
           <Route path="edc-terminals"       element={<EdcTerminals />} />
           <Route path="menu-sync"           element={<MenuSync />} />
           <Route path="customer-segments"   element={<CustomerSegments />} />
+          <Route path="kot-printer-config"   element={<KotPrinterConfig />} />
+          <Route path="stock-transfer"      element={<StockTransfer />} />
+          <Route path="stock-audit"         element={<StockAudit />} />
+          <Route path="delivery-zones"      element={<DeliveryZones />} />
+          <Route path="pre-orders"          element={<PreOrders />} />
+          <Route path="cash-flow-report"    element={<CashFlowReport />} />
+          <Route path="menu-engineering"    element={<MenuEngineering />} />
+          <Route path="qr-payment-config"   element={<QrPaymentConfig />} />
+          <Route path="push-notifications"  element={<PushNotifications />} />
+          <Route path="staff-performance"   element={<StaffPerformance />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -56,11 +56,37 @@ function isUrgent(dateStr, thresholdMin = 15) {
   return diff >= thresholdMin
 }
 
+// returns elapsed seconds from dateStr to now
+function elapsedSeconds(dateStr) {
+  if (!dateStr) return 0
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000))
+}
+
+// formats seconds as "12m 30s" or "45s"
+function formatCookTime(secs) {
+  if (secs < 60) return `${secs}s`
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${m}m ${s}s`
+}
+
+// color for cook timer: amber >10min, red >20min
+function cookTimerColor(secs) {
+  if (secs >= 20 * 60) return '#ef4444'
+  if (secs >= 10 * 60) return '#f59e0b'
+  return '#22c55e'
+}
+
 // ── Order Card ────────────────────────────────────────────────────────────────
 function OrderCard({ order, onAction, now }) {
   const [loading, setLoading] = useState(false)
   const cfg = STATUS[order.status] || STATUS.NEW
   const urgent = order.status === 'NEW' && isUrgent(order.createdAt)
+
+  // Cook timer: PREPARING uses startedAt, NEW uses createdAt
+  const timerBase = order.status === 'PREPARING' ? (order.startedAt || order.createdAt) : order.createdAt
+  const cookSecs  = elapsedSeconds(timerBase)
+  const timerColor = cookTimerColor(cookSecs)
 
   async function handleAction() {
     if (loading) return
@@ -121,6 +147,40 @@ function OrderCard({ order, onAction, now }) {
         <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap', flexShrink: 0 }}>
           {timeElapsed(order.createdAt)}
         </span>
+      </div>
+
+      {/* Section badge + cook timer row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        {order.sectionName ? (
+          <span style={{
+            background: '#1e1b4b',
+            color: '#a5b4fc',
+            border: '1px solid #4f46e544',
+            borderRadius: 20,
+            padding: '2px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+          }}>
+            📍 {order.sectionName}
+          </span>
+        ) : (
+          <span />
+        )}
+        {/* Cook timer — only for NEW and PREPARING */}
+        {(order.status === 'NEW' || order.status === 'PREPARING') && (
+          <span style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: timerColor,
+            fontFamily: 'monospace',
+            background: `${timerColor}18`,
+            border: `1px solid ${timerColor}44`,
+            borderRadius: 20,
+            padding: '2px 10px',
+          }}>
+            ⏱ {formatCookTime(cookSecs)}
+          </span>
+        )}
       </div>
 
       {/* Items list */}
@@ -315,7 +375,7 @@ export default function KitchenDisplay() {
     return () => clearInterval(id)
   }, [])
 
-  // ── WebSocket — reuse proven hook (same as OnlineOrders, Dashboard) ─
+  // ── WebSocket — kitchen orders ────────────────────────────────────
   useWebSocket(`/topic/${restaurantId}/kitchen`, useCallback((order) => {
     setWsState('connected')
     setOrders(prev => {
@@ -330,6 +390,37 @@ export default function KitchenDisplay() {
       return [order, ...prev]
     })
   }, []))
+
+  // ── WebSocket — auto-print on new KOT ────────────────────────────
+  useWebSocket(`/topic/${restaurantId}/print`, useCallback((kot) => {
+    if (!kot || !kot.kotRef) return
+    const tableStr = kot.tableNumber > 0 ? `Table ${kot.tableNumber}` : kot.source || 'POS'
+    const itemsHtml = (kot.items || []).map(i => `<tr><td style="padding:4px 8px;font-size:16px">${i}</td></tr>`).join('')
+    const win = window.open('', '_blank', 'width=380,height=600')
+    if (!win) return
+    win.document.write(`
+      <html><head><title>KOT</title>
+      <style>body{font-family:monospace;margin:0;padding:16px}
+      h2{text-align:center;font-size:20px;margin:0 0 4px}
+      p{text-align:center;margin:2px 0;font-size:13px}
+      table{width:100%;border-collapse:collapse;margin-top:12px}
+      tr{border-bottom:1px dashed #ccc}
+      .total{border-top:2px solid #000;font-weight:bold}
+      </style></head>
+      <body>
+        <h2>${kot.kotRef}</h2>
+        <p>${tableStr}</p>
+        ${kot.billNumber ? `<p>Bill: ${kot.billNumber}</p>` : ''}
+        <p>${new Date(kot.createdAt || Date.now()).toLocaleTimeString()}</p>
+        <hr/>
+        <table>${itemsHtml}</table>
+        <hr/><p style="text-align:center;font-size:11px">** KOT **</p>
+      </body></html>
+    `)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print(); win.close() }, 300)
+  }, [restaurantId]))
 
   // ── Action handler ────────────────────────────────────────────────
   const handleAction = useCallback(async (order) => {
@@ -359,6 +450,12 @@ export default function KitchenDisplay() {
     PREPARING: orders.filter(o => o.status === 'PREPARING'),
     READY:     orders.filter(o => o.status === 'READY'),
   }
+
+  // ── Cook time stats ───────────────────────────────────────────────
+  const readyWithTime = byStatus.READY.filter(o => o.actualTime > 0)
+  const avgCookMin = readyWithTime.length > 0
+    ? Math.round(readyWithTime.reduce((sum, o) => sum + o.actualTime, 0) / readyWithTime.length)
+    : null
 
   const wsColor  = wsState === 'connected' ? '#22c55e' : wsState === 'error' ? '#ef4444' : '#f59e0b'
   const wsLabel  = wsState === 'connected' ? 'Live' : wsState === 'error' ? 'WS Error' : 'Connecting…'
@@ -443,6 +540,57 @@ export default function KitchenDisplay() {
             </div>
           )
         })}
+      </div>
+
+      {/* ── Cook time stats bar ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
+      }}>
+        <div style={{
+          background: '#1e293b',
+          border: '1px solid #334155',
+          borderRadius: 8,
+          padding: '7px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Avg Cook Time</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#f59e0b', fontFamily: 'monospace' }}>
+            {avgCookMin !== null ? `${avgCookMin}m` : '—'}
+          </span>
+        </div>
+        <div style={{
+          background: '#1e293b',
+          border: '1px solid #334155',
+          borderRadius: 8,
+          padding: '7px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Orders in Queue</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#ef4444', fontFamily: 'monospace' }}>
+            {byStatus.NEW.length}
+          </span>
+        </div>
+        <div style={{
+          background: '#1e293b',
+          border: '1px solid #334155',
+          borderRadius: 8,
+          padding: '7px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Preparing</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#f59e0b', fontFamily: 'monospace' }}>
+            {byStatus.PREPARING.length}
+          </span>
+        </div>
       </div>
 
       {/* ── Columns ── */}

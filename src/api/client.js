@@ -420,3 +420,68 @@ export const franchiseApi = {
   summary:      ()                   => api.get('/franchise/summary'),
   brandReports: (brandName)          => api.get(`/franchise/brand/${brandName}`),
 }
+
+// ── KOT Printers ─────────────────────────────────────────────────
+export const kotPrinterApi = {
+  list:   ()          => api.get('/kot-printers'),
+  create: (body)      => api.post('/kot-printers', body),
+  update: (id, body)  => api.put(`/kot-printers/${id}`, body),
+  delete: (id)        => api.delete(`/kot-printers/${id}`),
+}
+
+// ── Delivery Zones ────────────────────────────────────────────────
+export const deliveryZoneApi = {
+  list:   ()          => api.get('/delivery-zones'),
+  create: (body)      => api.post('/delivery-zones', body),
+  update: (id, body)  => api.put(`/delivery-zones/${id}`, body),
+  delete: (id)        => api.delete(`/delivery-zones/${id}`),
+  check:  (distanceKm) => api.post('/delivery-zones/check', { distanceKm }),
+}
+
+// ── Pre-Orders ────────────────────────────────────────────────────
+export const preOrderApi = {
+  list:         (status)      => api.get(`/pre-orders${status ? `?status=${status}` : ''}`),
+  create:       (body)        => api.post('/pre-orders', body),
+  updateStatus: (id, status)  => api.put(`/pre-orders/${id}/status`, { status }),
+  cancel:       (id)          => api.delete(`/pre-orders/${id}`),
+}
+
+// ── Stock Transfer ────────────────────────────────────────────────
+export const stockTransferApi = {
+  list:         ()          => api.get('/stock-transfers'),
+  create:       (body)      => api.post('/stock-transfers', body),
+  updateStatus: (id, status) => api.put(`/stock-transfers/${id}/status`, { status }),
+}
+
+// ── Stock Audit ───────────────────────────────────────────────────
+export const stockAuditApi = {
+  list:        ()                    => api.get('/stock-audits'),
+  create:      (body)                => api.post('/stock-audits', body),
+  get:         (id)                  => api.get(`/stock-audits/${id}`),
+  updateItem:  (id, itemId, physicalQty) => api.put(`/stock-audits/${id}/items/${itemId}`, { physicalQty }),
+  complete:    (id)                  => api.post(`/stock-audits/${id}/complete`),
+  cancel:      (id)                  => api.delete(`/stock-audits/${id}`),
+}
+
+// ── QR Payment (PayTM / PhonePe) ──────────────────────────────────
+export const qrPaymentApi = {
+  list:        ()          => api.get('/qr-payment/configs'),
+  save:        (body)      => api.post('/qr-payment/configs', body),
+  delete:      (id)        => api.delete(`/qr-payment/configs/${id}`),
+  generateQr:  (body)      => api.post('/qr-payment/generate-qr', body),
+}
+
+// ── Push Notifications ────────────────────────────────────────────
+export const pushApi = {
+  getTokens:  ()          => api.get('/push/tokens'),
+  getLogs:    ()          => api.get('/push/logs'),
+  send:       (body)      => api.post('/push/send', body),
+  deleteToken:(token)     => api.delete(`/push/tokens/${encodeURIComponent(token)}`),
+}
+
+// ── Reports (new) ─────────────────────────────────────────────────
+export const reportsExtApi = {
+  cashFlow:        (from, to) => api.get(`/reports/cash-flow?from=${from}&to=${to}`),
+  menuEngineering: (from, to) => api.get(`/reports/menu-engineering?from=${from}&to=${to}`),
+  staffPerformance:(from, to) => api.get(`/reports/staff/performance?from=${from}&to=${to}`),
+}

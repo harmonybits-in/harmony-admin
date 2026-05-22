@@ -124,6 +124,211 @@ ${bill.notes ? `<div style="font-size:11px;margin-top:4px;color:#555">Note: ${bi
   setTimeout(() => { w.print(); w.close() }, 500)
 }
 
+// ── Split By Person Modal ─────────────────────────────────────────────────
+function SplitByPersonModal({ bill, onClose }) {
+  const toast = useToast()
+  const [persons,     setPersons]     = useState(2)
+  const [paymentMode, setPaymentMode] = useState('CASH')
+  const [loading,     setLoading]     = useState(false)
+  const [result,      setResult]      = useState(null)  // { perPerson, splits[] }
+
+  const total = bill?.finalAmount || bill?.total || 0
+
+  async function handleCalculate() {
+    if (persons < 2 || persons > 20) { toast.error('Persons 2 se 20 ke beech hone chahiye'); return }
+    setLoading(true)
+    setResult(null)
+    try {
+      const { token } = useAuthStore.getState()
+      const BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(
+        `${BASE}/api/v1/bills/${bill.id}/split-equal?persons=${persons}&paymentMode=${paymentMode}`,
+        { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'Split calculate nahi hua')
+      }
+      const data = await res.json()
+      // API returns array of splits or a summary object; handle both shapes
+      if (Array.isArray(data)) {
+        setResult({ perPerson: data[0]?.amount ?? (total / persons), splits: data })
+      } else {
+        const perPerson = data.perPersonAmount ?? data.perPerson ?? (total / persons)
+        const splits = data.splits ?? Array.from({ length: persons }, (_, i) => ({
+          personNumber: i + 1, amount: perPerson,
+        }))
+        setResult({ perPerson, splits })
+      }
+    } catch (e) {
+      // Fallback: calculate client-side
+      const perPerson = Math.ceil(total / persons)
+      const splits = Array.from({ length: persons }, (_, i) => ({
+        personNumber: i + 1, amount: perPerson,
+      }))
+      setResult({ perPerson, splits })
+      toast.success('Calculated locally (API not reached)')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleCopy() {
+    if (!result) return
+    const lines = [
+      `Bill #${bill.billNumber || bill.id} — Split by ${persons} persons`,
+      `Total: ₹${total.toLocaleString('en-IN')} | Per Person: ₹${result.perPerson.toLocaleString('en-IN')}`,
+      `Payment: ${paymentMode}`,
+      '',
+      ...result.splits.map(s => `Person ${s.personNumber}: ₹${Number(s.amount).toLocaleString('en-IN')}`),
+    ]
+    navigator.clipboard.writeText(lines.join('\n'))
+    toast.success('Split breakdown copied!')
+  }
+
+  function handleBackdrop(e) { if (e.target === e.currentTarget) onClose() }
+
+  return (
+    <div onClick={handleBackdrop} style={{
+      position: 'fixed', inset: 0, background: '#0009', zIndex: 1100,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    }}>
+      <div style={{
+        background: '#1e293b', borderRadius: 14, padding: '1.5rem',
+        width: '100%', maxWidth: 420, maxHeight: '85vh', overflowY: 'auto',
+        boxShadow: '0 24px 64px #0008',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+              👥 Split by Person
+            </div>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+              Bill #{bill?.billNumber || bill?.id} · Total: ₹{total.toLocaleString('en-IN')}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', fontSize: 22, cursor: 'pointer',
+            color: '#94a3b8', lineHeight: 1, padding: '0 4px',
+          }}>×</button>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600,
+              letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>
+              NUMBER OF PERSONS
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => setPersons(p => Math.max(2, p - 1))} style={{
+                width: 34, height: 34, borderRadius: 8, border: '1px solid #475569',
+                background: '#334155', color: '#fff', fontSize: 18, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>−</button>
+              <input type="number" value={persons} min={2} max={20}
+                onChange={e => setPersons(Math.min(20, Math.max(2, parseInt(e.target.value) || 2)))}
+                style={{
+                  width: 60, textAlign: 'center', padding: '7px 10px', borderRadius: 8,
+                  border: '1px solid #475569', background: '#334155',
+                  color: '#fff', fontSize: 16, fontWeight: 700,
+                }} />
+              <button onClick={() => setPersons(p => Math.min(20, p + 1))} style={{
+                width: 34, height: 34, borderRadius: 8, border: '1px solid #475569',
+                background: '#334155', color: '#fff', fontSize: 18, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>+</button>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>persons (max 20)</span>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600,
+              letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>
+              PAYMENT MODE
+            </label>
+            <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} style={{
+              background: '#334155', border: '1px solid #475569', color: '#fff',
+              padding: '8px 12px', borderRadius: 8, width: '100%', fontSize: 13,
+            }}>
+              {['CASH', 'UPI', 'CARD'].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          {/* Quick preview */}
+          <div style={{ background: '#0f172a', borderRadius: 8, padding: '10px 14px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Estimated per person</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: '#3b82f6' }}>
+              ₹{Math.ceil(total / persons).toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          <button onClick={handleCalculate} disabled={loading} style={{
+            background: loading ? '#475569' : '#3b82f6', color: '#fff', border: 'none',
+            borderRadius: 8, padding: '10px 16px', cursor: loading ? 'not-allowed' : 'pointer',
+            fontSize: 13, fontWeight: 600,
+          }}>
+            {loading ? '⏳ Calculating...' : '🔢 Calculate Split'}
+          </button>
+        </div>
+
+        {/* Result */}
+        {result && (
+          <div style={{ border: '1px solid #22c55e44', borderRadius: 10,
+            background: '#22c55e0a', padding: '1rem' }}>
+            {/* Summary */}
+            <div style={{ display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#22c55e', fontWeight: 700,
+                  letterSpacing: '0.06em' }}>SPLIT RESULT</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginTop: 2 }}>
+                  ₹{Number(result.perPerson).toLocaleString('en-IN')}
+                  <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 400 }}> / person</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+                  Total ₹{total.toLocaleString('en-IN')} · {persons} persons · {paymentMode}
+                </div>
+              </div>
+              <button onClick={handleCopy} style={{
+                background: '#1e293b', border: '1px solid #475569', color: '#94a3b8',
+                borderRadius: 7, padding: '6px 12px', cursor: 'pointer', fontSize: 11,
+              }}>📋 Copy</button>
+            </div>
+
+            {/* Per-person list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {result.splits.map((s, i) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '7px 10px', borderRadius: 7,
+                  background: i % 2 === 0 ? '#334155' : '#1e293b',
+                  fontSize: 13,
+                }}>
+                  <span style={{ color: '#cbd5e1' }}>
+                    👤 Person {s.personNumber || (i + 1)}
+                  </span>
+                  <span style={{ fontWeight: 700, color: '#22c55e' }}>
+                    ₹{Number(s.amount).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Print hint */}
+            <div style={{ marginTop: 10, padding: '7px 10px', background: '#1e293b',
+              borderRadius: 7, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+              💡 Print ke liye browser Ctrl+P use karo ya Copy karke share karo
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Bill Detail Modal ─────────────────────────────────────────────────────
 function BillDetailModal({ billId, restaurant, onClose }) {
   const toast = useToast()
@@ -138,6 +343,7 @@ function BillDetailModal({ billId, restaurant, onClose }) {
   const [splitTable,   setSplitTable]   = useState('')
   const [mergeBillId,  setMergeBillId]  = useState('')
   const [actionLoading,setActionLoading]= useState(false)
+  const [showSplitByPerson, setShowSplitByPerson] = useState(false)
 
   async function handleSendWhatsApp() {
     setSending(true)
@@ -313,6 +519,12 @@ function BillDetailModal({ billId, restaurant, onClose }) {
                 border: 'none', cursor: sending ? 'not-allowed' : 'pointer',
               }}>{sending ? '⏳ Sending...' : '📲 WhatsApp'}</button>
             )}
+            <button onClick={() => setShowSplitByPerson(true)} style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: 'var(--bg-secondary)',
+              color: 'var(--text)',
+              border: '1px solid var(--border)', cursor: 'pointer',
+            }}>👥 Split by Person</button>
             <button onClick={() => setMode(mode === 'split' ? 'view' : 'split')} style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
               background: mode === 'split' ? '#f59e0b' : 'var(--bg-secondary)',
@@ -515,6 +727,11 @@ function BillDetailModal({ billId, restaurant, onClose }) {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Split By Person Modal — rendered inside BillDetailModal overlay */}
+        {showSplitByPerson && (
+          <SplitByPersonModal bill={bill} onClose={() => setShowSplitByPerson(false)} />
         )}
 
         {/* E-Invoice / IRN */}
