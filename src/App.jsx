@@ -51,6 +51,19 @@ import Refunds              from './pages/Refunds'
 import Reservations         from './pages/Reservations'
 import CashRegister         from './pages/CashRegister'
 import Item86               from './pages/Item86'
+import Roster              from './pages/Roster'
+import SmsMarketing        from './pages/SmsMarketing'
+import FoodCostReport      from './pages/FoodCostReport'
+import PnlReport           from './pages/PnlReport'
+import GiftCards                from './pages/GiftCards'
+import FranchiseRoyalty         from './pages/FranchiseRoyalty'
+import CustomerFacingDisplay    from './pages/CustomerFacingDisplay'
+import QrOrder                  from './pages/QrOrder'
+import AggregatorReconciliation from './pages/AggregatorReconciliation'
+import OndcConfig        from './pages/OndcConfig'
+import EdcTerminals      from './pages/EdcTerminals'
+import MenuSync          from './pages/MenuSync'
+import CustomerSegments  from './pages/CustomerSegments'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -64,6 +77,10 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/chat/:restaurantId" element={<ChatWidget />} />
+        {/* Public pages — no auth */}
+        <Route path="/cfd/:restaurantId"             element={<CustomerFacingDisplay />} />
+        <Route path="/qr/:restaurantId/t/:tableId"   element={<QrOrder />} />
+        <Route path="/qr/:restaurantId"              element={<QrOrder />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index            element={<Dashboard />} />
           <Route path="bills"     element={<Bills />} />
@@ -111,6 +128,17 @@ export default function App() {
           <Route path="reservations"      element={<Reservations />} />
           <Route path="cash-register"     element={<CashRegister />} />
           <Route path="item-86"           element={<Item86 />} />
+          <Route path="roster"            element={<Roster />} />
+          <Route path="sms-marketing"     element={<SmsMarketing />} />
+          <Route path="food-cost-report"  element={<FoodCostReport />} />
+          <Route path="pnl-report"        element={<PnlReport />} />
+          <Route path="gift-cards"        element={<GiftCards />} />
+          <Route path="franchise-royalty"           element={<FranchiseRoyalty />} />
+          <Route path="aggregator-reconciliation"   element={<AggregatorReconciliation />} />
+          <Route path="ondc-config"         element={<OndcConfig />} />
+          <Route path="edc-terminals"       element={<EdcTerminals />} />
+          <Route path="menu-sync"           element={<MenuSync />} />
+          <Route path="customer-segments"   element={<CustomerSegments />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

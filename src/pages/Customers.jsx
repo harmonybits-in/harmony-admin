@@ -8,6 +8,11 @@ import { SkeletonTable } from '../components/Skeleton'
 // ── Constants ─────────────────────────────────────────────────────────────
 const TIERS       = ['ALL', 'BRONZE', 'SILVER', 'GOLD']
 const TIER_COLOR  = { BRONZE: '#cd7f32', SILVER: '#9e9e9e', GOLD: '#f59e0b' }
+const SEGMENTS    = ['ALL', 'CHAMPION', 'LOYAL', 'BIG_SPENDER', 'PROMISING', 'AT_RISK', 'NEW', 'LOST', 'OCCASIONAL']
+const SEG_COLOR   = {
+  CHAMPION: '#f59e0b', LOYAL: '#16A34A', BIG_SPENDER: '#7c3aed', PROMISING: '#2563eb',
+  AT_RISK: '#FF5A00', NEW: '#0891b2', LOST: '#DC2626', OCCASIONAL: '#6b7280',
+}
 const PAY_COLORS  = { CASH: '#10b981', UPI: '#6366f1', CARD: '#f59e0b', ONLINE: '#ec4899' }
 const ORDER_LABELS= { DINE_IN:'Dine In', PICKUP:'Pickup', DELIVERY:'Delivery', ONLINE:'Online' }
 const CAT_COLOR   = { FOOD:'#d97706', SERVICE:'#2563eb', AMBIENCE:'#7c3aed', OVERALL:'#059669' }
@@ -416,6 +421,7 @@ export default function Customers() {
   const [totalPg,   setTotalPg]   = useState(1)
   const [loading,   setLoading]   = useState(true)
   const [tier,      setTier]      = useState('ALL')
+  const [segment,   setSegment]   = useState('ALL')
   const [search,    setSearch]    = useState('')
   const [selected,  setSelected]  = useState(null)
 
@@ -423,8 +429,9 @@ export default function Customers() {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page, size:20 })
-      if (tier !== 'ALL') params.set('tier', tier)
-      if (search)         params.set('search', search)
+      if (tier !== 'ALL')    params.set('tier', tier)
+      if (segment !== 'ALL') params.set('segment', segment)
+      if (search)            params.set('search', search)
       const res  = await customerApi.getAll(rid, params.toString())
       const list = res?.content || (Array.isArray(res) ? res : null)
       setCustomers(list || MOCK)
@@ -432,9 +439,9 @@ export default function Customers() {
     } catch (_) {
       setCustomers(MOCK); setTotalPg(1)
     } finally { setLoading(false) }
-  }, [rid, page, tier, search])
+  }, [rid, page, tier, segment, search])
 
-  useEffect(()=>{ load() }, [page, tier])
+  useEffect(()=>{ load() }, [page, tier, segment])
 
   function handleSearch(e) {
     if (e.key === 'Enter') { setPage(0); load() }
@@ -451,9 +458,16 @@ export default function Customers() {
             Row click karo profile dekhne ke liye — orders, feedback, WhatsApp
           </p>
         </div>
-        <button onClick={load} style={{ padding:'7px 14px', borderRadius:8, fontSize:12,
-          border:'1px solid var(--border)', background:'transparent',
-          color:'var(--text)', cursor:'pointer' }}>Refresh</button>
+        <div style={{ display:'flex', gap:8 }}>
+          <a href="/customer-segments" style={{ padding:'7px 14px', borderRadius:8, fontSize:12,
+            border:'1px solid var(--border)', background:'transparent',
+            color:'var(--text)', cursor:'pointer', textDecoration:'none', display:'inline-block' }}>
+            Segments
+          </a>
+          <button onClick={load} style={{ padding:'7px 14px', borderRadius:8, fontSize:12,
+            border:'1px solid var(--border)', background:'transparent',
+            color:'var(--text)', cursor:'pointer' }}>Refresh</button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -471,6 +485,13 @@ export default function Customers() {
             color:       tier===t ? '#fff' : 'var(--text-muted)',
           }}>{t}</button>
         ))}
+        <select value={segment} onChange={e=>{ setSegment(e.target.value); setPage(0) }}
+          style={{ padding:'7px 12px', borderRadius:8, fontSize:12, fontWeight:600,
+            border:'1px solid var(--border)', background:'transparent',
+            color: segment!=='ALL' ? 'var(--accent)' : 'var(--text-muted)', cursor:'pointer',
+            outline:'none' }}>
+          {SEGMENTS.map(s => <option key={s} value={s}>{s === 'ALL' ? 'All Segments' : s}</option>)}
+        </select>
       </div>
 
       {/* Table */}
@@ -500,7 +521,12 @@ export default function Customers() {
                     {c.phone}
                   </td>
                   <td style={{ padding:'12px 16px' }}>
-                    <Badge color={TIER_COLOR[c.tier]||'#888'}>{c.tier||'BRONZE'}</Badge>
+                    <div style={{ display:'flex', gap:4, flexWrap:'wrap', alignItems:'center' }}>
+                      <Badge color={TIER_COLOR[c.tier]||'#888'}>{c.tier||'BRONZE'}</Badge>
+                      {c.segment && (
+                        <Badge color={SEG_COLOR[c.segment]||'#888'} small>{c.segment}</Badge>
+                      )}
+                    </div>
                   </td>
                   <td style={{ padding:'12px 16px', fontSize:13 }}>{c.totalVisits||0}</td>
                   <td style={{ padding:'12px 16px', fontSize:13, color:'#10b981', fontWeight:600 }}>

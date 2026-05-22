@@ -318,6 +318,16 @@ export const reservationApi = {
   cancel:       (id)             => api.delete(`/reservations/${id}`),
 }
 
+// ── SMS Marketing ─────────────────────────────────────────────────
+export const smsApi = {
+  list:    (page = 0, size = 20)        => api.get(`/sms-campaigns?page=${page}&size=${size}`),
+  create:  (body)                        => api.post('/sms-campaigns', body),
+  preview: (segment, param)              => api.get(`/sms-campaigns/preview?segment=${segment}${param != null ? '&segmentParam=' + param : ''}`),
+  send:    (id)                          => api.post(`/sms-campaigns/${id}/send`, {}),
+  remove:  (id)                          => api.delete(`/sms-campaigns/${id}`),
+  config:  ()                            => api.get('/sms-campaigns/config'),
+}
+
 // ── General Reports ────────────────────────────────────────────────
 export const reportApi = {
   salesSummary:    (from, to)           => api.get(`/reports/sales/summary?from=${from}&to=${to}`),
@@ -327,4 +337,86 @@ export const reportApi = {
   staffAttendance: (from, to)           => api.get(`/reports/staff/attendance?from=${from}&to=${to}`),
   staffPerformance:(from, to)           => api.get(`/reports/staff/performance?from=${from}&to=${to}`),
   pnl:             (from, to)           => api.get(`/reports/pnl?from=${from}&to=${to}`),
+  foodCost:        (from, to)           => api.get(`/reports/food-cost?from=${from}&to=${to}`),
+}
+
+// ── Gift Cards ────────────────────────────────────────────────────
+export const giftCardApi = {
+  issue:        (body)               => api.post('/gift-cards', body),
+  balance:      (code)               => api.get(`/gift-cards/${code}/balance`),
+  redeem:       (code, amount)       => api.post(`/gift-cards/${code}/redeem`, { amount }),
+  list:         (page=0, size=20)    => api.get(`/gift-cards?page=${page}&size=${size}`),
+  cancel:       (id)                 => api.delete(`/gift-cards/${id}`),
+}
+
+// ── CFD ───────────────────────────────────────────────────────────
+export const cfdApi = {
+  update: (items, subtotal, discount, total) =>
+    api.post('/cfd/update', { items, subtotal, discount, total }),
+  clear: () => api.delete('/cfd/clear'),
+}
+
+// ── Aggregator Reconciliation ─────────────────────────────────────
+export const reconciliationApi = {
+  list:         ()                    => api.get('/aggregator-reconciliation'),
+  byPlatform:   (platform)            => api.get(`/aggregator-reconciliation/platform/${platform}`),
+  markReviewed: (id, notes)           => api.patch(`/aggregator-reconciliation/${id}/reviewed`, { notes }),
+  upload: (platform, period, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('platform', platform)
+    fd.append('period', period)
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (typeof window !== 'undefined' && window.__VITE_API_URL__)
+      || import.meta.env.VITE_API_URL
+      || 'http://localhost:2026'
+    return fetch(`${base}/api/v1/aggregator-reconciliation/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }).then(async r => {
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || r.statusText) }
+      return r.json()
+    })
+  },
+}
+
+// ── ONDC Config ──────────────────────────────────────────────────
+export const ondcApi = {
+  getConfig:  ()     => api.get('/ondc/admin/config'),
+  saveConfig: (body) => api.post('/ondc/admin/config', body),
+}
+
+// ── EDC Terminals ────────────────────────────────────────────────
+export const edcApi = {
+  getTerminals:    ()          => api.get('/edc/terminals'),
+  createTerminal:  (body)      => api.post('/edc/terminals', body),
+  updateTerminal:  (id, body)  => api.put(`/edc/terminals/${id}`, body),
+  deleteTerminal:  (id)        => api.delete(`/edc/terminals/${id}`),
+  initiatePayment: (id, body)  => api.post(`/edc/terminals/${id}/initiate`, body),
+  getTransactions: ()          => api.get('/edc/transactions'),
+}
+
+// ── Menu Sync (SUPER_ADMIN) ───────────────────────────────────────
+export const menuSyncApi = {
+  getRestaurants:  ()                         => api.get('/admin/menu-sync/restaurants'),
+  preview:         (sourceId)                 => api.get(`/admin/menu-sync/preview/${sourceId}`),
+  syncMenu:        (sourceId, targetId)       => api.post(`/admin/menu-sync/${sourceId}/to/${targetId}`),
+}
+
+// ── Customer Segmentation ─────────────────────────────────────────
+export const segmentApi = {
+  runSegmentation: ()    => api.post('/customers/segment/run'),
+  getStats:        (rid) => api.get(`/customers/segment/stats?restaurantId=${rid}`),
+}
+
+// ── Franchise Royalty ─────────────────────────────────────────────
+export const franchiseApi = {
+  configure:    (body)               => api.put('/franchise/configure', body),
+  getConfig:    ()                   => api.get('/franchise/config'),
+  generate:     (period)             => api.post(`/franchise/generate?period=${period}`),
+  markPaid:     (id, notes)          => api.patch(`/franchise/${id}/paid`, { notes }),
+  history:      (page=0, size=12)    => api.get(`/franchise/history?page=${page}&size=${size}`),
+  summary:      ()                   => api.get('/franchise/summary'),
+  brandReports: (brandName)          => api.get(`/franchise/brand/${brandName}`),
 }
