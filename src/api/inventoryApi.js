@@ -183,3 +183,20 @@ export const stockApi = {
   addStock:    (data) => stockReq('POST', '/inventory/add', data),
   deductStock: (data) => stockReq('POST', '/inventory/deduct', data),
 }
+
+// ── Waste Tracking ─────────────────────────────────────────────────
+export const wasteApi = {
+  log: (data) => post('/waste', data),
+  getAll: (rid, { from, to } = {}) => {
+    const p = new URLSearchParams({ restaurantId: rid })
+    if (from) p.set('from', from)
+    if (to)   p.set('to',   to)
+    return get(`/waste?${p}`)
+  },
+  getSummary: (rid, { from, to } = {}) => {
+    const p = new URLSearchParams({ restaurantId: rid })
+    if (from) p.set('from', from)
+    if (to)   p.set('to',   to)
+    return get(`/waste/summary?${p}`)
+  },
+}

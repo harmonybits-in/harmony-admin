@@ -18,6 +18,7 @@ import SuppliersPage         from '../components/inventory/SuppliersPage'
 import PurchaseOrdersPage    from '../components/inventory/PurchaseOrdersPage'
 import LowStockPage          from '../components/inventory/LowStockPage'
 import PlaceholderPage       from '../components/inventory/PlaceholderPage'
+import WastagePage           from '../components/inventory/WastagePage'
 
 export default function Inventory() {
   const rid      = useAuthStore(s => s.restaurantId)
@@ -75,7 +76,7 @@ export default function Inventory() {
         <Route path="stock/opening"          element={<PlaceholderPage title="Opening Stock" icon="📋"/>}/>
         <Route path="consumption/sales"      element={<PlaceholderPage title="Sales Consumption" icon="📉"/>}/>
         <Route path="consumption/transfer"   element={<PlaceholderPage title="Transfer" icon="🔄"/>}/>
-        <Route path="consumption/wastage"    element={<PlaceholderPage title="Wastage" icon="🗑️"/>}/>
+        <Route path="consumption/wastage"    element={<WastagePage rid={rid}/>}/>
         <Route path="consumption/return"     element={<PlaceholderPage title="Sales Return" icon="↩️"/>}/>
         <Route path="production"             element={<PlaceholderPage title="Production" icon="🏭"/>}/>
         <Route path="reports/stock"          element={<PlaceholderPage title="Current Stock Report" icon="☑️"/>}/>
