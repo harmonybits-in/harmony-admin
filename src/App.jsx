@@ -49,6 +49,7 @@ import Expenses             from './pages/Expenses'
 import PromotionRules       from './pages/PromotionRules'
 import Refunds              from './pages/Refunds'
 import Reservations         from './pages/Reservations'
+import CashRegister         from './pages/CashRegister'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -107,6 +108,7 @@ export default function App() {
           <Route path="promotion-rules"    element={<PromotionRules />} />
           <Route path="refunds"            element={<Refunds />} />
           <Route path="reservations"      element={<Reservations />} />
+          <Route path="cash-register"     element={<CashRegister />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

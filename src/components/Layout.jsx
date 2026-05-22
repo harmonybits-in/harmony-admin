@@ -93,8 +93,9 @@ const NAV_GROUPS = [
   {
     key: 'finance', label: 'Finance',
     items: [
-      { to: '/expenses', icon: '💸', label: 'Expenses' },
-      { to: '/refunds',  icon: '↩️', label: 'Refunds & Credit Notes' },
+      { to: '/cash-register', icon: '🏪', label: 'Cash Register'        },
+      { to: '/expenses',      icon: '💸', label: 'Expenses'              },
+      { to: '/refunds',       icon: '↩️', label: 'Refunds & Credit Notes'},
     ],
   },
   {
