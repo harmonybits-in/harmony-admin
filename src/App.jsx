@@ -78,6 +78,21 @@ import ReviewManagement    from './pages/ReviewManagement'
 import PredictiveAnalytics from './pages/PredictiveAnalytics'
 import Marketplace         from './pages/Marketplace'
 import SelfOrderingKiosk  from './pages/SelfOrderingKiosk'
+import TipsTracking      from './pages/TipsTracking'
+import UpiLoyalty        from './pages/UpiLoyalty'
+import MenuImageUpload   from './pages/MenuImageUpload'
+import ComboBuilder      from './pages/ComboBuilder'
+import NutritionInfo     from './pages/NutritionInfo'
+import DigitalMenuBoard  from './pages/DigitalMenuBoard'
+import CashDrawerMgmt    from './pages/CashDrawerMgmt'
+import CourseManagement  from './pages/CourseManagement'
+import DunzoIntegration  from './pages/DunzoIntegration'
+import ExpiryTracking    from './pages/ExpiryTracking'
+import VendorComparison  from './pages/VendorComparison'
+import StaffTraining     from './pages/StaffTraining'
+import AbandonedCart     from './pages/AbandonedCart'
+import NpsPage           from './pages/NpsPage'
+import ReportsHub        from './pages/ReportsHub'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -167,7 +182,22 @@ export default function App() {
           <Route path="review-management"      element={<ReviewManagement />} />
           <Route path="predictive-analytics"   element={<PredictiveAnalytics />} />
           <Route path="marketplace"            element={<Marketplace />} />
+          <Route path="tips"              element={<TipsTracking />} />
+          <Route path="upi-loyalty"       element={<UpiLoyalty />} />
+          <Route path="menu-images"       element={<MenuImageUpload />} />
+          <Route path="combo-builder"     element={<ComboBuilder />} />
+          <Route path="nutrition"         element={<NutritionInfo />} />
+          <Route path="cash-drawer"       element={<CashDrawerMgmt />} />
+          <Route path="courses"           element={<CourseManagement />} />
+          <Route path="dunzo"             element={<DunzoIntegration />} />
+          <Route path="expiry-tracking"   element={<ExpiryTracking />} />
+          <Route path="vendor-comparison" element={<VendorComparison />} />
+          <Route path="staff-training"    element={<StaffTraining />} />
+          <Route path="abandoned-carts"   element={<AbandonedCart />} />
+          <Route path="nps"               element={<NpsPage />} />
+          <Route path="reports-hub"       element={<ReportsHub />} />
         </Route>
+        <Route path="/menu-board/:restaurantId" element={<DigitalMenuBoard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

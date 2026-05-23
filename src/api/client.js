@@ -502,3 +502,104 @@ export const predictiveApi = {
   busyHours:     ()         => api.get('/analytics/predictions/busy-hours'),
   inventoryRisk: ()         => api.get('/analytics/predictions/inventory-risk'),
 }
+
+// ── Combo Builder ─────────────────────────────────────────────────
+export const comboApi = {
+  list:   ()                  => api.get('/combos'),
+  create: (body)              => api.post('/combos', body),
+  update: (id, body)          => api.put(`/combos/${id}`, body),
+  delete: (id)                => api.delete(`/combos/${id}`),
+}
+
+// ── Cash Drawer ───────────────────────────────────────────────────
+export const cashDrawerApi = {
+  current:   ()                    => api.get('/cash-drawer/current'),
+  open:      (body)                => api.post('/cash-drawer/open', body),
+  close:     (body)                => api.post('/cash-drawer/close', body),
+  sessions:  ()                    => api.get('/cash-drawer/sessions'),
+  entries:   (sessionId)           => api.get(`/cash-drawer/sessions/${sessionId}/entries`),
+  addEntry:  (sid, body)           => api.post(`/cash-drawer/sessions/${sid}/entries`, body),
+  reconcile: (sessionId)           => api.get(`/cash-drawer/sessions/${sessionId}/reconcile`),
+}
+
+// ── Course Management ─────────────────────────────────────────────
+export const courseApi = {
+  list:   ()              => api.get('/courses'),
+  create: (body)          => api.post('/courses', body),
+  update: (id, body)      => api.put(`/courses/${id}`, body),
+  delete: (id)            => api.delete(`/courses/${id}`),
+}
+
+// ── Dunzo Integration ─────────────────────────────────────────────
+export const dunzoApi = {
+  getConfig:      ()       => api.get('/dunzo/config'),
+  updateConfig:   (body)   => api.put('/dunzo/config', body),
+  getDeliveries:  ()       => api.get('/dunzo/deliveries'),
+  createDelivery: (body)   => api.post('/dunzo/deliveries', body),
+}
+
+// ── Expiry Tracking ───────────────────────────────────────────────
+export const expiryApi = {
+  all:        ()            => api.get('/inventory/batches'),
+  expiring:   (days)        => api.get(`/inventory/batches/expiring?days=${days}`),
+  byMaterial: (matId)       => api.get(`/inventory/batches/material/${matId}`),
+  add:        (body)        => api.post('/inventory/batches', body),
+  update:     (id, body)    => api.put(`/inventory/batches/${id}`, body),
+  expire:     (id)          => api.post(`/inventory/batches/${id}/expire`),
+}
+
+// ── Vendor Price Comparison ───────────────────────────────────────
+export const vendorApi = {
+  all:     ()       => api.get('/vendors/prices'),
+  compare: (matId)  => api.get(`/vendors/prices/compare/${matId}`),
+  vendors: ()       => api.get('/vendors/prices/vendors'),
+  add:     (body)   => api.post('/vendors/prices', body),
+}
+
+// ── Staff Training ────────────────────────────────────────────────
+export const trainingApi = {
+  modules:        ()              => api.get('/training/modules'),
+  createModule:   (body)          => api.post('/training/modules', body),
+  updateModule:   (id, body)      => api.put(`/training/modules/${id}`, body),
+  deleteModule:   (id)            => api.delete(`/training/modules/${id}`),
+  staffProgress:  (staffId)       => api.get(`/training/progress/staff/${staffId}`),
+  updateProgress: (body)          => api.post('/training/progress', body),
+}
+
+// ── Abandoned Cart ────────────────────────────────────────────────
+export const abandonedCartApi = {
+  stats:   ()              => api.get('/abandoned-carts/stats'),
+  list:    (pending)       => api.get(`/abandoned-carts?pending=${pending}`),
+  create:  (body)          => api.post('/abandoned-carts', body),
+  recover: (id)            => api.post(`/abandoned-carts/${id}/recover`),
+  remind:  (id)            => api.post(`/abandoned-carts/${id}/remind`),
+}
+
+// ── NPS ───────────────────────────────────────────────────────────
+export const npsApi = {
+  stats:   ()      => api.get('/nps/stats'),
+  entries: ()      => api.get('/nps/entries'),
+  submit:  (body)  => api.post('/nps/submit', body),
+}
+
+// ── UPI Loyalty ───────────────────────────────────────────────────
+export const upiLoyaltyApi = {
+  getConfig:    ()        => api.get('/upi-loyalty/config'),
+  updateConfig: (body)    => api.put('/upi-loyalty/config', body),
+  balance:      (phone)   => api.get(`/upi-loyalty/balance?phone=${encodeURIComponent(phone)}`),
+  transactions: (phone)   => api.get(`/upi-loyalty/transactions${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`),
+  earn:         (body)    => api.post('/upi-loyalty/earn', body),
+  redeem:       (body)    => api.post('/upi-loyalty/redeem', body),
+}
+
+// ── Extended Reports ──────────────────────────────────────────────
+export const extReportsApi = {
+  paymentModes:     (from, to) => api.get(`/reports/payment-modes?from=${from}&to=${to}`),
+  waiterSales:      (from, to) => api.get(`/reports/waiter-sales?from=${from}&to=${to}`),
+  tableRevenue:     (from, to) => api.get(`/reports/table-revenue?from=${from}&to=${to}`),
+  discounts:        (from, to) => api.get(`/reports/discounts?from=${from}&to=${to}`),
+  gstSummary:       (from, to) => api.get(`/reports/gst-summary?from=${from}&to=${to}`),
+  customerInsights: (from, to) => api.get(`/reports/customer-insights?from=${from}&to=${to}`),
+  stockValuation:   ()         => api.get('/reports/stock-valuation'),
+  tips:             (from, to) => api.get(`/reports/tips?from=${from}&to=${to}`),
+}
