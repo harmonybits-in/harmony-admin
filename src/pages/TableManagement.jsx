@@ -84,6 +84,68 @@ function QrModal({ table, onClose }) {
   )
 }
 
+// ── Merge Table Modal ─────────────────────────────────────────────────────
+function MergeModal({ table, tables, onClose, onMerged, toast }) {
+  const [toTableId, setToTableId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const otherTables = tables.filter(t => t.id !== table.id)
+
+  async function handleMerge() {
+    if (!toTableId) return toast.error('Target table select karo')
+    setSaving(true)
+    try {
+      await api.post(`/tables/merge?fromTableId=${table.id}&toTableId=${toTableId}`, {})
+      toast.success(`Table ${table.tableNo} merged successfully`)
+      onMerged()
+    } catch (err) { toast.error(err.message || 'Merge failed') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 14, width: '100%', maxWidth: 420,
+        padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Merge Table {table.tableNo}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none',
+            fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px' }}>
+          Merge Table {table.tableNo} into&hellip; — Occupancy from Table {table.tableNo} will be
+          transferred to the selected table. Table {table.tableNo} will become available.
+        </p>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Target Table *</label>
+          <select value={toTableId} onChange={e => setToTableId(e.target.value)}
+            style={{ width: '100%', marginTop: 6, padding: '9px 12px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--bg-page)',
+              color: 'var(--text)', fontSize: 13, boxSizing: 'border-box', cursor: 'pointer' }}>
+            <option value="">-- Select table --</option>
+            {otherTables.map(t => (
+              <option key={t.id} value={t.id}>{t.tableNo}{t.areaName ? ` (${t.areaName})` : ''}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" onClick={onClose}
+            style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}>
+            Cancel
+          </button>
+          <button type="button" onClick={handleMerge} disabled={saving}
+            style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none',
+              background: saving ? '#ccc' : '#f59e0b', color: '#fff',
+              cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>
+            {saving ? 'Merging…' : 'Confirm Merge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Add/Edit Table Modal ──────────────────────────────────────────────────
 function TableModal({ table, areas, onClose, onSaved, toast }) {
   const [form, setForm] = useState({
@@ -251,9 +313,10 @@ export default function TableManagement() {
   const [tables,    setTables]    = useState([])
   const [areas,     setAreas]     = useState([])
   const [loading,   setLoading]   = useState(true)
-  const [modal,     setModal]     = useState(null) // 'table' | 'area'
-  const [editTable, setEditTable] = useState(null)
-  const [qrTable,   setQrTable]   = useState(null)
+  const [modal,      setModal]      = useState(null) // 'table' | 'area' | 'merge'
+  const [editTable,  setEditTable]  = useState(null)
+  const [qrTable,    setQrTable]    = useState(null)
+  const [mergeTable, setMergeTable] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -286,6 +349,15 @@ export default function TableManagement() {
       setTables(prev => prev.map(t => t.id === table.id ? { ...t, qrToken: res.qrToken } : t))
       setQrTable({ ...table, qrToken: res.qrToken })
     } catch (err) { toast.error(err.message || 'QR generate failed') }
+  }
+
+  async function splitTable(table) {
+    if (!confirm(`Mark Table ${table.tableNo} as available (split/settled)?`)) return
+    try {
+      await api.post(`/tables/${table.id}/split`, {})
+      toast.success(`Table ${table.tableNo} is now available`)
+      load()
+    } catch (err) { toast.error(err.message || 'Split failed') }
   }
 
   async function deleteArea(id) {
@@ -414,6 +486,22 @@ export default function TableManagement() {
                         🗑
                       </button>
                     </div>
+                    {t.status === 'OCCUPIED' && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <button onClick={() => { setMergeTable(t); setModal('merge') }}
+                          title="Merge this table into another"
+                          style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '1px solid #fde68a',
+                            background: '#fffbeb', color: '#92400e', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                          Merge
+                        </button>
+                        <button onClick={() => splitTable(t)}
+                          title="Mark table as available (split/settled)"
+                          style={{ flex: 1, padding: '5px 0', borderRadius: 6, border: '1px solid #bbf7d0',
+                            background: '#f0fdf4', color: '#166534', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                          Split
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -479,6 +567,14 @@ export default function TableManagement() {
         <AreaModal
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); load() }}
+          toast={toast} />
+      )}
+      {modal === 'merge' && mergeTable && (
+        <MergeModal
+          table={mergeTable}
+          tables={tables}
+          onClose={() => { setModal(null); setMergeTable(null) }}
+          onMerged={() => { setModal(null); setMergeTable(null); load() }}
           toast={toast} />
       )}
     </div>

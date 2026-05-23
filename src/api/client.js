@@ -603,3 +603,46 @@ export const extReportsApi = {
   stockValuation:   ()         => api.get('/reports/stock-valuation'),
   tips:             (from, to) => api.get(`/reports/tips?from=${from}&to=${to}`),
 }
+
+// ── Token Queue ───────────────────────────────────────────────────
+export const tokenQueueApi = {
+  getQueue:     (rid)        => api.get(`/tokens/`),
+  issue:        (rid, body)  => api.post('/tokens/issue', body),
+  callNext:     (rid)        => api.post('/tokens/call-next', {}),
+  callNumber:   (rid, num)   => api.post(`/tokens/call/${num}`, {}),
+  complete:     (rid, num)   => api.post(`/tokens/${num}/complete`, {}),
+  skip:         (rid, num)   => api.post(`/tokens/${num}/skip`, {}),
+  reset:        (rid)        => api.post('/tokens/reset', {}),
+  updateConfig: (rid, body)  => api.put('/tokens/config', body),
+  history:      (rid)        => api.get('/tokens/history'),
+}
+
+// ── KOT Print Jobs ────────────────────────────────────────────────
+export const kotPrintJobApi = {
+  pending: (rid)           => api.get('/kot-print-jobs/pending'),
+  history: (rid)           => api.get('/kot-print-jobs/history'),
+  done:    (rid, id)       => api.put(`/kot-print-jobs/${id}/done`, {}),
+  failed:  (rid, id, body) => api.put(`/kot-print-jobs/${id}/failed`, body),
+  trigger: (rid, body)     => api.post('/kot-print-jobs/trigger', body),
+}
+
+// ── Google Food Ordering ──────────────────────────────────────────
+export const googleFoodApi = {
+  getConfig:    (rid)       => api.get('/google-food/config'),
+  updateConfig: (rid, body) => api.put('/google-food/config', body),
+  getOrders:    (rid)       => api.get('/google-food/orders'),
+}
+
+// ── Cameras ───────────────────────────────────────────────────────
+export const cameraApi = {
+  list:   (rid)           => api.get('/cameras/'),
+  create: (rid, body)     => api.post('/cameras/', body),
+  update: (rid, id, body) => api.put(`/cameras/${id}`, body),
+  delete: (rid, id)       => api.delete(`/cameras/${id}`),
+}
+
+// ── Table Operations ──────────────────────────────────────────────
+export const tableOpsApi = {
+  merge: (rid, fromId, toId) => api.post(`/tables/merge?fromTableId=${fromId}&toTableId=${toId}`, {}),
+  split: (rid, id)           => api.post(`/tables/${id}/split`, {}),
+}

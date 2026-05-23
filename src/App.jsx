@@ -93,6 +93,12 @@ import StaffTraining     from './pages/StaffTraining'
 import AbandonedCart     from './pages/AbandonedCart'
 import NpsPage           from './pages/NpsPage'
 import ReportsHub        from './pages/ReportsHub'
+import OrderTracking       from './pages/OrderTracking'
+import TokenDisplay        from './pages/TokenDisplay'
+import KitchenVideoSystem  from './pages/KitchenVideoSystem'
+import GoogleFoodOrdering  from './pages/GoogleFoodOrdering'
+import TokenQueueMgmt      from './pages/TokenQueueMgmt'
+import KotPrintJobsMgmt    from './pages/KotPrintJobsMgmt'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -111,6 +117,8 @@ export default function App() {
         <Route path="/qr/:restaurantId/t/:tableId"   element={<QrOrder />} />
         <Route path="/qr/:restaurantId"              element={<QrOrder />} />
         <Route path="/kiosk/:restaurantId"           element={<SelfOrderingKiosk />} />
+        <Route path="/track/:restaurantId/:orderId"  element={<OrderTracking />} />
+        <Route path="/token/:restaurantId"           element={<TokenDisplay />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index            element={<Dashboard />} />
           <Route path="bills"     element={<Bills />} />
@@ -196,6 +204,10 @@ export default function App() {
           <Route path="abandoned-carts"   element={<AbandonedCart />} />
           <Route path="nps"               element={<NpsPage />} />
           <Route path="reports-hub"       element={<ReportsHub />} />
+          <Route path="kitchen-video"     element={<KitchenVideoSystem />} />
+          <Route path="google-food"       element={<GoogleFoodOrdering />} />
+          <Route path="token-queue"       element={<TokenQueueMgmt />} />
+          <Route path="kot-print-jobs"    element={<KotPrintJobsMgmt />} />
         </Route>
         <Route path="/menu-board/:restaurantId" element={<DigitalMenuBoard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
