@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — Harmony Admin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #863bff;
+      color: #fff;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 16px;
+    }
+    img { width: 80px; height: 80px; border-radius: 20px; }
+    h1 { font-size: 22px; font-weight: 700; }
+    p { font-size: 14px; color: rgba(255,255,255,0.75); max-width: 280px; line-height: 1.5; }
+    button {
+      margin-top: 8px;
+      background: #fff;
+      color: #863bff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 28px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <img src="/apple-touch-icon.png" alt="Harmony" />
+  <h1>Internet nahi hai</h1>
+  <p>Harmony Admin ke liye internet connection zaroori hai. Reconnect karke dobara try karo.</p>
+  <button onclick="location.reload()">Dobara Try Karo</button>
+</body>
+</html>

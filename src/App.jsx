@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import Layout         from './components/Layout'
 import ToastContainer from './components/ToastContainer'
+import InstallBanner  from './components/InstallBanner'
 import Login          from './pages/Login'
 import Dashboard      from './pages/Dashboard'
 import Bills          from './pages/Bills'
@@ -110,6 +111,7 @@ export default function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ToastContainer />
+      <InstallBanner />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/chat/:restaurantId" element={<ChatWidget />} />
