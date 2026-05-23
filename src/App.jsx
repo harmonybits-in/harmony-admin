@@ -99,6 +99,7 @@ import KitchenVideoSystem  from './pages/KitchenVideoSystem'
 import GoogleFoodOrdering  from './pages/GoogleFoodOrdering'
 import TokenQueueMgmt      from './pages/TokenQueueMgmt'
 import KotPrintJobsMgmt    from './pages/KotPrintJobsMgmt'
+import SocialMediaMarketing from './pages/SocialMediaMarketing'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -208,6 +209,7 @@ export default function App() {
           <Route path="google-food"       element={<GoogleFoodOrdering />} />
           <Route path="token-queue"       element={<TokenQueueMgmt />} />
           <Route path="kot-print-jobs"    element={<KotPrintJobsMgmt />} />
+          <Route path="social-media"      element={<SocialMediaMarketing />} />
         </Route>
         <Route path="/menu-board/:restaurantId" element={<DigitalMenuBoard />} />
         <Route path="*" element={<Navigate to="/" replace />} />

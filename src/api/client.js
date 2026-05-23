@@ -429,6 +429,16 @@ export const kotPrinterApi = {
   delete: (id)        => api.delete(`/kot-printers/${id}`),
 }
 
+// ── Social Media Marketing ────────────────────────────────────────
+export const socialApi = {
+  getConfig:   (restaurantId) => api.get(`/social/config?restaurantId=${restaurantId}`),
+  updateConfig:(restaurantId, data) => api.put(`/social/config?restaurantId=${restaurantId}`, data),
+  getPosts:    (restaurantId) => api.get(`/social/posts?restaurantId=${restaurantId}`),
+  createPost:  (restaurantId, data) => api.post(`/social/posts?restaurantId=${restaurantId}`, data),
+  publishPost: (restaurantId, postId) => api.post(`/social/posts/${postId}/publish?restaurantId=${restaurantId}`, {}),
+  deletePost:  (restaurantId, postId) => api.delete(`/social/posts/${postId}?restaurantId=${restaurantId}`),
+}
+
 // ── Delivery Zones ────────────────────────────────────────────────
 export const deliveryZoneApi = {
   list:   ()          => api.get('/delivery-zones'),

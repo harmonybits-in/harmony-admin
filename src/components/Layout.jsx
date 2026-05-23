@@ -58,8 +58,9 @@ const NAV_GROUPS = [
       { to: '/loyalty',   icon: '⭐', label: 'Loyalty Points'},
       { to: '/feedback',  icon: '💬', label: 'Feedback'      },
       { to: '/chatbot',       icon: '🤖', label: 'Chatbot',        badge: 'chatbot' },
-      { to: '/sms-marketing', icon: '📨', label: 'SMS Marketing' },
-      { to: '/gift-cards',    icon: '🎁', label: 'Gift Cards'    },
+      { to: '/sms-marketing',  icon: '📨', label: 'SMS Marketing'   },
+      { to: '/social-media',  icon: '📣', label: 'Social Media'    },
+      { to: '/gift-cards',    icon: '🎁', label: 'Gift Cards'      },
     ],
   },
   {
