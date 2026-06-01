@@ -1,345 +1,506 @@
 // src/components/inventory/BulkRecipeEditor.jsx
-import { useState, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { api } from '../../api/client'
 import { useToast } from '../../hooks/useToast'
-import SearchSelect from './SearchSelect'
 
-const INP = {
-  padding:'7px 10px', borderRadius:6, border:'1px solid #dde1e7',
-  fontSize:13, color:'#111', background:'#fff', outline:'none',
-  boxSizing:'border-box', width:'100%',
-}
-const SEL = { ...INP, cursor:'pointer', appearance:'none' }
 const BTN_RED = {
-  padding:'8px 20px', borderRadius:6, border:'none',
+  padding:'9px 24px', borderRadius:6, border:'none',
   background:'#e53e3e', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer',
 }
 const BTN_OUT = {
-  padding:'8px 18px', borderRadius:6, border:'1px solid #dde1e7',
+  padding:'9px 20px', borderRadius:6, border:'1px solid #dde1e7',
   background:'#fff', color:'#555', fontSize:13, cursor:'pointer',
 }
-const TD = { padding:'11px 16px', fontSize:13, borderBottom:'1px solid #f0f0f0', verticalAlign:'middle' }
-const TH = { padding:'10px 16px', textAlign:'left', fontSize:11, color:'#888', fontWeight:700,
-  borderBottom:'2px solid #f0f0f0', background:'#fafafa', whiteSpace:'nowrap' }
+const INP_STYLE = {
+  padding:'8px 10px', borderRadius:6, border:'1px solid #dde1e7',
+  fontSize:13, color:'#111', background:'#fff', outline:'none',
+  boxSizing:'border-box', width:'100%',
+}
+const INFO = {
+  display:'flex', alignItems:'flex-start', gap:8, padding:'10px 14px',
+  background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8,
+  fontSize:12, color:'#0369a1', marginTop:8,
+}
 
-export default function BulkRecipeEditor({ rawMaterials, recipes, rid, onBack, onSaved }) {
-  const toast = useToast()
-  const [selectedRmId, setSelectedRmId] = useState(null)
-  const [rows, setRows] = useState([])           // { recipeId, productId, productName, variantId, variantName, restaurantId, ingredients, qty, unit, modified }
-  const [saving, setSaving] = useState(false)
+// ── Multi-select dropdown ─────────────────────────────────────────────────────
+function MultiSelect({ options, value, onChange, placeholder }) {
+  const [open,   setOpen]   = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef()
 
-  const selectedRm = rawMaterials.find(r => r.id === selectedRmId)
+  useEffect(() => {
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    if (open) document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
 
-  // When user picks a raw material — build rows from matching recipes
-  function handleRmChange(rmId) {
-    setSelectedRmId(rmId)
-    if (!rmId) { setRows([]); return }
-    const rm = rawMaterials.find(r => r.id === rmId)
-    const matched = recipes
-      .filter(rec => (rec.ingredients || []).some(ing => ing.rawMaterialId === rmId))
-      .map(rec => {
-        const ing = rec.ingredients.find(i => i.rawMaterialId === rmId)
-        return {
-          recipeId:    rec.id,
-          productId:   rec.productId,
-          productName: rec.productName,
-          variantId:   rec.variantId   || null,
-          variantName: rec.variantName || null,
-          restaurantId:rec.restaurantId || rid,
-          ingredients: rec.ingredients,   // full ingredient list for PUT
-          qty:         String(ing.quantity ?? ''),
-          unit:        ing.unit || (rm?.units?.[0] || ''),
-          modified:    false,
+  const filtered = options.filter(o =>
+    o.label.toLowerCase().includes(search.toLowerCase())
+  )
+
+  function toggle(id) {
+    onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id])
+  }
+
+  const selectedLabels = options.filter(o => value.includes(o.id))
+
+  return (
+    <div ref={ref} style={{ position:'relative' }}>
+      <div onClick={() => setOpen(o => !o)} style={{
+        padding:'7px 10px', borderRadius:6, border:'1px solid #dde1e7',
+        background:'#fff', cursor:'pointer', minHeight:38,
+        display:'flex', flexWrap:'wrap', gap:4, alignItems:'center',
+        boxSizing:'border-box',
+      }}>
+        {selectedLabels.length === 0
+          ? <span style={{ color:'#aaa', fontSize:13 }}>{placeholder}</span>
+          : selectedLabels.map(o => (
+            <span key={o.id} style={{
+              background:'#e8eaed', borderRadius:4, padding:'2px 6px',
+              fontSize:12, display:'flex', alignItems:'center', gap:4, color:'#333',
+            }}>
+              {o.label}
+              <span onClick={e => { e.stopPropagation(); toggle(o.id) }}
+                style={{ cursor:'pointer', color:'#888', fontWeight:700, fontSize:14, lineHeight:1 }}>×</span>
+            </span>
+          ))
         }
-      })
-    setRows(matched)
+        <span style={{ marginLeft:'auto', fontSize:10, color:'#aaa', flexShrink:0 }}>▼</span>
+      </div>
+      {open && (
+        <div style={{
+          position:'absolute', left:0, right:0, top:'calc(100% + 4px)', zIndex:400,
+          background:'#fff', border:'1px solid #e8eaed', borderRadius:8,
+          boxShadow:'0 4px 20px rgba(0,0,0,.12)', overflow:'hidden', display:'flex', flexDirection:'column',
+        }}>
+          <div style={{ padding:'8px 10px', borderBottom:'1px solid #f0f0f0' }}>
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search..." style={{ ...INP_STYLE, padding:'5px 8px', border:'none', outline:'none' }} />
+          </div>
+          <div style={{ overflowY:'auto', maxHeight:220 }}>
+            {filtered.map(o => (
+              <div key={o.id} onClick={() => toggle(o.id)} style={{
+                padding:'9px 12px', fontSize:13, cursor:'pointer',
+                display:'flex', alignItems:'center', gap:10,
+                background: value.includes(o.id) ? '#f0f9ff' : 'transparent',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = value.includes(o.id) ? '#e0f2fe' : '#f9fafb' }}
+              onMouseLeave={e => { e.currentTarget.style.background = value.includes(o.id) ? '#f0f9ff' : 'transparent' }}>
+                <input type="checkbox" readOnly checked={value.includes(o.id)}
+                  style={{ cursor:'pointer', accentColor:'#2563eb', width:15, height:15 }} />
+                <span>{o.label}</span>
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding:14, textAlign:'center', color:'#aaa', fontSize:13 }}>No results</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Single-select dropdown ────────────────────────────────────────────────────
+function SingleSelect({ options, value, onChange, placeholder, required }) {
+  const [open,   setOpen]   = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef()
+
+  useEffect(() => {
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    if (open) document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+  const selected = options.find(o => o.id === value)
+
+  return (
+    <div ref={ref} style={{ position:'relative' }}>
+      <div onClick={() => setOpen(o => !o)} style={{
+        ...INP_STYLE, cursor:'pointer', display:'flex',
+        justifyContent:'space-between', alignItems:'center',
+        borderColor: required && !value ? '#fca5a5' : '#dde1e7',
+      }}>
+        <span style={{ color: selected ? '#111' : '#aaa' }}>{selected?.label || placeholder}</span>
+        <span style={{ fontSize:10, color:'#aaa' }}>▼</span>
+      </div>
+      {open && (
+        <div style={{
+          position:'absolute', left:0, right:0, top:'calc(100% + 4px)', zIndex:400,
+          background:'#fff', border:'1px solid #e8eaed', borderRadius:8,
+          boxShadow:'0 4px 20px rgba(0,0,0,.12)', overflow:'hidden', display:'flex', flexDirection:'column',
+        }}>
+          <div style={{ padding:'8px 10px', borderBottom:'1px solid #f0f0f0' }}>
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search..." style={{ ...INP_STYLE, padding:'5px 8px', border:'none', outline:'none' }} />
+          </div>
+          <div style={{ overflowY:'auto', maxHeight:220 }}>
+            {filtered.map(o => (
+              <div key={o.id} onClick={() => { onChange(o.id); setOpen(false); setSearch('') }} style={{
+                padding:'9px 12px', fontSize:13, cursor:'pointer',
+                display:'flex', justifyContent:'space-between', alignItems:'center',
+                background: value === o.id ? '#f0f9ff' : 'transparent',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f9fafb' }}
+              onMouseLeave={e => { e.currentTarget.style.background = value === o.id ? '#f0f9ff' : 'transparent' }}>
+                <span>{o.label}</span>
+                {value === o.id && <span style={{ color:'#2563eb', fontSize:14 }}>✓</span>}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding:14, textAlign:'center', color:'#aaa', fontSize:13 }}>No results</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Helper ────────────────────────────────────────────────────────────────────
+const getCatName = c => (typeof c === 'object' ? c?.name : c) || ''
+
+// ── Main Component ────────────────────────────────────────────────────────────
+export default function BulkRecipeEditor({ rawMaterials, recipes, products, catById, rid, onBack, onSaved }) {
+  const toast = useToast()
+
+  const [mode,        setMode]        = useState('update')   // 'update' | 'delete'
+  const [selRmIds,    setSelRmIds]    = useState([])         // update mode: multi RM filter
+  const [delRmId,     setDelRmId]     = useState(null)       // delete mode: single RM
+  const [delUnit,     setDelUnit]     = useState(null)       // delete mode: unit required
+  const [selCats,     setSelCats]     = useState([])         // multi category filter
+  const [itemType,    setItemType]    = useState('all')      // all | item | variation | addon
+  const [submitting,  setSubmitting]  = useState(false)
+
+  // Derived options
+  const rmOptions  = rawMaterials.map(r => ({ id: r.id, label: r.name }))
+  const catOptions = [...new Set(
+    products.map(p => getCatName(p.category)).filter(Boolean)
+  )].map(c => ({ id: c, label: c }))
+
+  const delRm    = rawMaterials.find(r => r.id === delRmId)
+  const unitOpts = (delRm?.units || []).map(u => ({ id: u, label: u }))
+
+  const itemTypeOpts = [
+    { id:'all',       label:'All item' },
+    { id:'item',      label:'Only item (no variants)' },
+    { id:'variation', label:'Variations item' },
+    { id:'addon',     label:'Addon items' },
+  ]
+
+  // ── Filter products matching current criteria ─────────────────────────────
+  function filterProducts() {
+    return products.filter(p => {
+      // Category filter
+      if (selCats.length > 0 && !selCats.includes(getCatName(p.category))) return false
+      // Item type filter
+      const hasVariants = (p.productVariants || []).length > 0
+      if (itemType === 'item'      && hasVariants) return false
+      if (itemType === 'variation' && !hasVariants) return false
+      // No addon concept currently — treat same as 'item'
+      return true
+    })
   }
 
-  function updRow(recipeId, field, value) {
-    setRows(rs => rs.map(r =>
-      r.recipeId === recipeId ? { ...r, [field]: value, modified: true } : r
-    ))
+  // ── UPDATE MODE: Download sheet pre-filled with current recipe data ────────
+  function downloadSheet() {
+    const filteredProds = filterProducts()
+    const maxRm = 10
+    const rmHeaders = Array.from({ length: maxRm }, (_, i) =>
+      `<th>RawMaterial${i+1}</th><th>Qty${i+1}</th><th>Unit${i+1}</th><th>Area${i+1}</th>`
+    ).join('')
+
+    const rows = filteredProds.map(p => {
+      // Find existing recipe for this product (base, no variant)
+      const rec = recipes.find(r => r.productId === p.id && !r.variantId)
+      let ings = rec?.ingredients || []
+
+      // If RM filter is active, only include matching ingredients
+      if (selRmIds.length > 0) {
+        ings = ings.filter(ing => selRmIds.includes(ing.rawMaterialId))
+      }
+
+      const rmCols = Array.from({ length: maxRm }, (_, i) => {
+        const ing = ings[i]
+        if (!ing) return '<td></td><td></td><td></td><td></td>'
+        const areas = Array.isArray(ing.areas) ? ing.areas.join(',') : (ing.areas || '')
+        return `<td>${ing.rawMaterialName || ''}</td><td>${ing.quantity || ''}</td><td>${ing.unit || ''}</td><td>${areas}</td>`
+      }).join('')
+
+      const catName = getCatName(p.category)
+      return `<tr><td>0x${p.id}</td><td>${p.name}</td><td>Item</td><td>${catName}</td><td></td><td>Active</td>${rmCols}</tr>`
+    }).join('')
+
+    const html = `<html><head><meta charset="UTF-8"></head><body><table border="1">
+<tr><th>ItemID</th><th>ItemName</th><th>ItemType</th><th>AddonArea</th><th>SapCode</th><th>ItemStatus</th>${rmHeaders}</tr>
+${rows}
+</table></body></html>`
+
+    const blob = new Blob([html], { type:'application/vnd.ms-excel' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url
+    a.download = 'Bulk_Recipe_Edit.xls'
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Sheet downloaded — ${filteredProds.length} items`)
   }
 
-  // Mark all rows with same value
-  function applyToAll(field, value) {
-    setRows(rs => rs.map(r => ({ ...r, [field]: value, modified: true })))
-  }
+  // ── DELETE MODE: Remove selected RM from all matching recipes ─────────────
+  async function handleDelete() {
+    if (!delRmId)  { toast.error('Raw material select karo'); return }
+    if (!delUnit)  { toast.error('Unit select karo'); return }
 
-  async function handleSave() {
-    const toSave = rows.filter(r => r.modified)
-    if (toSave.length === 0) { toast.error('Koi changes nahi kiye'); return }
-    setSaving(true)
+    const filteredProds = filterProducts()
+    const filteredProdIds = new Set(filteredProds.map(p => p.id))
+
+    const toUpdate = recipes.filter(r =>
+      filteredProdIds.has(r.productId) &&
+      (r.ingredients || []).some(ing => ing.rawMaterialId === delRmId && ing.unit === delUnit)
+    )
+
+    if (toUpdate.length === 0) {
+      toast.error('Matching recipes nahi mili — filters check karo')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `"${delRm?.name}" (${delUnit}) ko ${toUpdate.length} recipe(s) se remove karna chahte hain?`
+    )
+    if (!confirmed) return
+
+    setSubmitting(true)
     let ok = 0, fail = 0
     try {
-      await Promise.all(toSave.map(async row => {
+      await Promise.all(toUpdate.map(async rec => {
         try {
-          const updatedIngredients = row.ingredients.map(ing =>
-            ing.rawMaterialId === selectedRmId
-              ? { rawMaterialId: ing.rawMaterialId, quantity: Number(row.qty), unit: row.unit,
-                  areas: Array.isArray(ing.areas) ? ing.areas.join(',') : (ing.areas || '') }
-              : { rawMaterialId: ing.rawMaterialId, quantity: ing.quantity, unit: ing.unit,
-                  areas: Array.isArray(ing.areas) ? ing.areas.join(',') : (ing.areas || '') }
-          )
-          await api.put(`/inv/recipes/${row.recipeId}`, {
-            restaurantId: row.restaurantId,
-            productId:    row.productId,
-            variantId:    row.variantId,
-            variantName:  row.variantName,
+          const updatedIngredients = (rec.ingredients || [])
+            .filter(ing => !(ing.rawMaterialId === delRmId && ing.unit === delUnit))
+            .map(ing => ({
+              rawMaterialId: ing.rawMaterialId,
+              quantity:      ing.quantity,
+              unit:          ing.unit,
+              areas:         Array.isArray(ing.areas) ? ing.areas.join(',') : (ing.areas || ''),
+            }))
+
+          await api.put(`/inv/recipes/${rec.id}`, {
+            restaurantId: rec.restaurantId || rid,
+            productId:    rec.productId,
+            variantId:    rec.variantId || null,
+            variantName:  rec.variantName || null,
             ingredients:  updatedIngredients,
           })
           ok++
         } catch { fail++ }
       }))
-      if (fail > 0) toast.error(`${ok} saved, ${fail} failed`)
-      else toast.success(`${ok} recipe(s) updated successfully!`)
-      // Refresh rows — mark all as unmodified
-      setRows(rs => rs.map(r => ({ ...r, modified: false })))
+
+      if (fail > 0) toast.error(`${ok} updated, ${fail} failed`)
+      else toast.success(`"${delRm?.name}" successfully removed from ${ok} recipe(s)!`)
       onSaved()
-    } finally { setSaving(false) }
+    } finally { setSubmitting(false) }
   }
 
-  const modifiedCount = rows.filter(r => r.modified).length
+  const filteredCount = filterProducts().length
 
   return (
     <div style={{ background:'#f8f9fb', minHeight:'100%' }}>
 
       {/* ── Header ── */}
       <div style={{ background:'#fff', borderBottom:'1px solid #e8eaed',
-        padding:'16px 28px', marginBottom:20,
+        padding:'16px 28px', marginBottom:24,
         display:'flex', alignItems:'center', gap:16 }}>
         <button onClick={onBack} style={{ background:'none', border:'none',
           fontSize:20, cursor:'pointer', color:'#888', lineHeight:1, padding:4 }}>←</button>
         <div>
-          <h2 style={{ fontSize:18, fontWeight:800, color:'#1a1a2e', margin:0 }}>
-            Bulk Recipe Editor
-          </h2>
+          <h2 style={{ fontSize:18, fontWeight:800, color:'#1a1a2e', margin:0 }}>Bulk Recipe Editor</h2>
           <div style={{ fontSize:12, color:'#888', marginTop:2 }}>
-            Ek ingredient select karo — us ingredient wale saare recipes ek saath edit karo
+            Raw materials bulk mein update karo ya recipes se remove karo
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth:1000, margin:'0 auto', padding:'0 24px 100px' }}>
+      <div style={{ maxWidth:760, margin:'0 auto', padding:'0 24px 80px' }}>
 
-        {/* ── Raw Material Selector ── */}
+        {/* ── Mode selector ── */}
         <div style={{ background:'#fff', border:'1px solid #e8eaed', borderRadius:10,
           padding:'20px 24px', marginBottom:20, boxShadow:'0 1px 4px rgba(0,0,0,.04)' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-            <label style={{ fontSize:14, fontWeight:600, color:'#333', flexShrink:0 }}>
-              Select Ingredient
-            </label>
-            <div style={{ flex:1, maxWidth:360 }}>
-              <SearchSelect
-                value={selectedRmId}
-                onChange={handleRmChange}
-                options={rawMaterials}
-                placeholder="Raw material choose karo..."
+
+          <div style={{ marginBottom:12, fontSize:13, color:'#555', lineHeight:1.5 }}>
+            {mode === 'update'
+              ? 'Raw materials bulk mein update karo — items aur categories filter karke sheet download karo, fill karo, aur re-import karo.'
+              : 'Ek raw material ko selected menu items ki recipes se ek click mein remove karo.'
+            }
+          </div>
+
+          <div style={{ display:'flex', gap:24 }}>
+            {[
+              { id:'update', label:'Raw Material Update or Edit' },
+              { id:'delete', label:'Bulk raw material delete from recipe in one click' },
+            ].map(m => (
+              <label key={m.id} style={{ display:'flex', alignItems:'center', gap:8,
+                cursor:'pointer', fontSize:13, fontWeight: mode === m.id ? 600 : 400,
+                color: mode === m.id ? '#2563eb' : '#333' }}>
+                <input type="radio" name="mode" checked={mode === m.id}
+                  onChange={() => { setMode(m.id); setSelRmIds([]); setDelRmId(null); setDelUnit(null) }}
+                  style={{ accentColor:'#2563eb', cursor:'pointer' }} />
+                {m.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Filter fields ── */}
+        <div style={{ background:'#fff', border:'1px solid #e8eaed', borderRadius:10,
+          padding:'24px', marginBottom:20, boxShadow:'0 1px 4px rgba(0,0,0,.04)',
+          display:'flex', flexDirection:'column', gap:20 }}>
+
+          {/* ── UPDATE MODE: multi-select RMs ── */}
+          {mode === 'update' && (
+            <div>
+              <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+                Select Raw Materials
+                <span style={{ fontSize:11, color:'#aaa', fontWeight:400, marginLeft:6 }}>(optional — blank = all items)</span>
+              </label>
+              <MultiSelect
+                options={rmOptions}
+                value={selRmIds}
+                onChange={setSelRmIds}
+                placeholder="Select multiple raw materials"
               />
-            </div>
-            {selectedRmId && rows.length > 0 && (
-              <div style={{ fontSize:13, color:'#888' }}>
-                <span style={{ fontWeight:700, color:'#e53e3e' }}>{rows.length}</span> recipes mein use ho raha hai
+              <div style={INFO}>
+                <span>ℹ</span>
+                <span>Jinhe select karoge, unhe use karne wale menu items hi sheet mein aayenge. Blank chhodo toh saare items aayenge.</span>
               </div>
+            </div>
+          )}
+
+          {/* ── DELETE MODE: single RM + Unit ── */}
+          {mode === 'delete' && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+              <div>
+                <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+                  Select Raw Material <span style={{ color:'#e53e3e' }}>*</span>
+                </label>
+                <SingleSelect
+                  options={rmOptions}
+                  value={delRmId}
+                  onChange={v => { setDelRmId(v); setDelUnit(null) }}
+                  placeholder="Select Raw Material"
+                  required={true}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+                  Unit <span style={{ color:'#e53e3e' }}>*</span>
+                </label>
+                <SingleSelect
+                  options={unitOpts}
+                  value={delUnit}
+                  onChange={setDelUnit}
+                  placeholder="Select Unit"
+                  required={true}
+                />
+              </div>
+              <div style={{ gridColumn:'1/-1', ...INFO }}>
+                <span>ℹ</span>
+                <span>Jis raw material aur unit ko select karoge, woh saare matching recipes se remove ho jaayega. Yeh mandatory field hai kisi bhi action ke liye.</span>
+              </div>
+            </div>
+          )}
+
+          {/* ── Item Category (both modes) ── */}
+          <div>
+            <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+              Select Item Category
+              <span style={{ fontSize:11, color:'#aaa', fontWeight:400, marginLeft:6 }}>(optional)</span>
+            </label>
+            <MultiSelect
+              options={catOptions}
+              value={selCats}
+              onChange={setSelCats}
+              placeholder="Select multiple item categories"
+            />
+            <div style={INFO}>
+              <span>ℹ</span>
+              <span>
+                {mode === 'update'
+                  ? 'Sirf selected categories ke items sheet mein aayenge. Blank chhodo toh saare items aayenge.'
+                  : 'Sirf selected categories ke recipes mein changes honge. Blank chhodo toh saare items pe apply hoga.'
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* ── Item Type (both modes) ── */}
+          <div>
+            <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+              Select Menu Item Type
+            </label>
+            <SingleSelect
+              options={itemTypeOpts}
+              value={itemType}
+              onChange={setItemType}
+              placeholder="Select item type"
+            />
+            <div style={INFO}>
+              <span>ℹ</span>
+              <span>
+                {mode === 'update'
+                  ? 'Item type ke hisaab se sheet filter hogi: sirf Add-ons, sirf Variations, ya Sab.'
+                  : 'Jis type ke items ke liye raw material delete karna hai woh choose karo.'
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* ── Matching count preview ── */}
+          <div style={{ padding:'12px 16px', background:'#f8f9fb', borderRadius:8,
+            border:'1px solid #e8eaed', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span style={{ fontSize:13, color:'#555' }}>
+              Current filters se matching items:
+            </span>
+            <span style={{ fontSize:15, fontWeight:700, color:'#e53e3e' }}>
+              {filteredCount}
+            </span>
+          </div>
+
+          {/* ── Action buttons ── */}
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:12, paddingTop:4 }}>
+            <button onClick={onBack} style={BTN_OUT}>Cancel</button>
+            {mode === 'update' ? (
+              <button onClick={downloadSheet} style={BTN_RED}>
+                ⬇ Download Sheet
+              </button>
+            ) : (
+              <button
+                onClick={handleDelete}
+                disabled={submitting || !delRmId || !delUnit}
+                style={{ ...BTN_RED, opacity: (submitting || !delRmId || !delUnit) ? 0.6 : 1,
+                  background:'#dc2626' }}>
+                {submitting ? 'Deleting...' : 'Submit'}
+              </button>
             )}
           </div>
         </div>
 
-        {/* ── Empty / no match state ── */}
-        {selectedRmId && rows.length === 0 && (
-          <div style={{ textAlign:'center', padding:'60px 20px', color:'#aaa' }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>🔍</div>
-            <div style={{ fontSize:14, fontWeight:500 }}>
-              "{selectedRm?.name}" kisi bhi recipe mein use nahi ho raha
-            </div>
-          </div>
-        )}
-
-        {/* ── Recipe Table ── */}
-        {rows.length > 0 && (
+        {/* ── How to use guide ── */}
+        {mode === 'update' && (
           <div style={{ background:'#fff', border:'1px solid #e8eaed', borderRadius:10,
-            overflow:'visible', boxShadow:'0 1px 4px rgba(0,0,0,.04)' }}>
-
-            {/* Table toolbar */}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-              padding:'14px 20px', borderBottom:'1px solid #f0f0f0', background:'#fafafa',
-              borderRadius:'10px 10px 0 0' }}>
-              <span style={{ fontSize:14, fontWeight:700, color:'#333', display:'flex', alignItems:'center', gap:10 }}>
-                <span style={{ background:'#fff5f5', color:'#e53e3e', padding:'3px 10px',
-                  borderRadius:20, fontSize:12, fontWeight:700, border:'1px solid #fecaca' }}>
-                  {selectedRm?.name}
-                </span>
-                wale recipes
-                {modifiedCount > 0 && (
-                  <span style={{ fontSize:12, background:'#fffbe6', color:'#b45309',
-                    padding:'2px 8px', borderRadius:10, border:'1px solid #fde68a', fontWeight:600 }}>
-                    {modifiedCount} modified
-                  </span>
-                )}
-              </span>
-
-              {/* Apply to all */}
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:12, color:'#888' }}>Apply to all:</span>
-                <input
-                  type="number" min="0" placeholder="Qty"
-                  style={{ ...INP, width:80 }}
-                  onBlur={e => { if (e.target.value) applyToAll('qty', e.target.value) }}
-                />
-                <div style={{ position:'relative', width:110 }}>
-                  <select
-                    style={{ ...SEL, paddingRight:24 }}
-                    defaultValue=""
-                    onChange={e => { if (e.target.value) applyToAll('unit', e.target.value) }}
-                  >
-                    <option value="">Unit</option>
-                    {(selectedRm?.units || []).map(u => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                  <span style={{ position:'absolute', right:7, top:'50%',
-                    transform:'translateY(-50%)', pointerEvents:'none', fontSize:10, color:'#aaa' }}>▼</span>
-                </div>
-              </div>
+            padding:'20px 24px', boxShadow:'0 1px 4px rgba(0,0,0,.04)' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#333', marginBottom:12 }}>
+              Update Mode — How to use:
             </div>
-
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={TH}>Menu Item</th>
-                  <th style={{ ...TH, width:110 }}>Variant</th>
-                  <th style={{ ...TH, width:130 }}>Current Qty</th>
-                  <th style={{ ...TH, width:130 }}>Current Unit</th>
-                  <th style={{ ...TH, width:140 }}>New Qty</th>
-                  <th style={{ ...TH, width:150 }}>New Unit</th>
-                  <th style={{ ...TH, width:60 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, idx) => {
-                  const origIng = row.ingredients.find(i => i.rawMaterialId === selectedRmId)
-                  const origQty  = origIng?.quantity ?? ''
-                  const origUnit = origIng?.unit || ''
-                  return (
-                    <tr key={row.recipeId}
-                      style={{ background: row.modified ? '#fffef0' : idx % 2 === 0 ? '#fff' : '#fdfdfd' }}>
-
-                      {/* Product name */}
-                      <td style={TD}>
-                        <div style={{ fontWeight:500 }}>{row.productName}</div>
-                      </td>
-
-                      {/* Variant badge */}
-                      <td style={TD}>
-                        {row.variantName
-                          ? <span style={{ fontSize:11, background:'#eff6ff', color:'#3b82f6',
-                              padding:'2px 8px', borderRadius:10, fontWeight:600 }}>{row.variantName}</span>
-                          : <span style={{ fontSize:11, color:'#ccc' }}>Base</span>
-                        }
-                      </td>
-
-                      {/* Current qty (read-only) */}
-                      <td style={{ ...TD, color:'#888' }}>{origQty}</td>
-
-                      {/* Current unit (read-only) */}
-                      <td style={{ ...TD, color:'#888' }}>{origUnit}</td>
-
-                      {/* New qty */}
-                      <td style={TD}>
-                        <input
-                          type="number" min="0"
-                          value={row.qty}
-                          onChange={e => updRow(row.recipeId, 'qty', e.target.value)}
-                          placeholder="0"
-                          style={{
-                            ...INP,
-                            borderColor: row.modified && row.qty !== String(origQty) ? '#f59e0b' : '#dde1e7',
-                            fontWeight: row.modified ? 600 : 400,
-                            textAlign: 'center',
-                          }}
-                        />
-                      </td>
-
-                      {/* New unit */}
-                      <td style={TD}>
-                        <div style={{ position:'relative' }}>
-                          <select
-                            value={row.unit}
-                            onChange={e => updRow(row.recipeId, 'unit', e.target.value)}
-                            style={{
-                              ...SEL, paddingRight:24,
-                              borderColor: row.modified && row.unit !== origUnit ? '#f59e0b' : '#dde1e7',
-                            }}
-                          >
-                            {(selectedRm?.units || []).map(u => (
-                              <option key={u} value={u}>{u}</option>
-                            ))}
-                          </select>
-                          <span style={{ position:'absolute', right:7, top:'50%',
-                            transform:'translateY(-50%)', pointerEvents:'none', fontSize:10, color:'#aaa' }}>▼</span>
-                        </div>
-                      </td>
-
-                      {/* Modified indicator */}
-                      <td style={{ ...TD, textAlign:'center' }}>
-                        {row.modified && (
-                          <span style={{ fontSize:16, color:'#f59e0b' }} title="Modified">●</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-
-            {/* Summary footer */}
-            <div style={{ padding:'12px 20px', borderTop:'1px solid #f0f0f0',
-              display:'flex', alignItems:'center', justifyContent:'space-between',
-              background:'#fafafa', borderRadius:'0 0 10px 10px' }}>
-              <span style={{ fontSize:12, color:'#888' }}>
-                Total: {rows.length} recipes — {modifiedCount} modified
-              </span>
-              {modifiedCount > 0 && (
-                <span style={{ fontSize:12, color:'#b45309', background:'#fffbe6',
-                  padding:'4px 12px', borderRadius:8, border:'1px solid #fde68a' }}>
-                  {modifiedCount} recipe(s) save hongi
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Empty state ── */}
-        {!selectedRmId && (
-          <div style={{ textAlign:'center', padding:'60px 20px', color:'#aaa' }}>
-            <div style={{ fontSize:44, marginBottom:12 }}>✏️</div>
-            <div style={{ fontSize:14, fontWeight:500 }}>
-              Koi raw material select karo jise bulk edit karna hai
-            </div>
-            <div style={{ fontSize:12, marginTop:6, color:'#bbb' }}>
-              Us RM wale saare recipes ek table mein dikhenge
-            </div>
+            <ol style={{ margin:0, paddingLeft:20, fontSize:13, color:'#555', lineHeight:2 }}>
+              <li>Filters set karo (optional) aur <strong>Download Sheet</strong> click karo</li>
+              <li>Sheet mein RawMaterial, Qty, Unit columns fill karo</li>
+              <li>Recipe Management page pe wapas aao</li>
+              <li><strong>More Actions → Upload Recipe File</strong> se sheet upload karo</li>
+            </ol>
           </div>
         )}
       </div>
-
-      {/* ── Sticky footer ── */}
-      {modifiedCount > 0 && (
-        <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:100,
-          background:'#fff5f5', borderTop:'1px solid #fecaca',
-          padding:'12px 32px', display:'flex', justifyContent:'flex-end', gap:12, alignItems:'center' }}>
-          <span style={{ fontSize:13, color:'#888', marginRight:'auto' }}>
-            {modifiedCount} recipe(s) mein changes hain
-          </span>
-          <button onClick={onBack} style={BTN_OUT}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{
-            ...BTN_RED, opacity: saving ? 0.7 : 1,
-            boxShadow:'0 2px 8px rgba(229,62,62,.3)',
-          }}>
-            {saving ? 'Saving...' : `Save ${modifiedCount} Recipe(s)`}
-          </button>
-        </div>
-      )}
     </div>
   )
 }

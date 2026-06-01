@@ -253,6 +253,8 @@ ${productRows}
       <BulkRecipeEditor
         rawMaterials={rawMaterials}
         recipes={recipes}
+        products={products}
+        catById={catById}
         rid={rid}
         onBack={handleBulkBack}
         onSaved={handleBulkSaved}
