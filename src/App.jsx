@@ -101,10 +101,25 @@ import GoogleFoodOrdering  from './pages/GoogleFoodOrdering'
 import TokenQueueMgmt      from './pages/TokenQueueMgmt'
 import KotPrintJobsMgmt    from './pages/KotPrintJobsMgmt'
 import SocialMediaMarketing from './pages/SocialMediaMarketing'
+import DataHub              from './pages/DataHub'
+import FssaiCompliance     from './pages/FssaiCompliance'
+import SuperAdminLayout    from './components/SuperAdminLayout'
+import SADashboard         from './pages/superadmin/SADashboard'
+import SARestaurants       from './pages/superadmin/SARestaurants'
+import SASubscriptions     from './pages/superadmin/SASubscriptions'
+import SAAddons            from './pages/superadmin/SAAddons'
+import SARiders            from './pages/superadmin/SARiders'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
   return isLoggedIn() ? children : <Navigate to="/login" replace />
+}
+
+function SuperAdminRoute({ children }) {
+  const { isLoggedIn, user } = useAuthStore()
+  if (!isLoggedIn()) return <Navigate to="/login" replace />
+  if (user?.role !== 'SUPER_ADMIN') return <Navigate to="/" replace />
+  return children
 }
 
 export default function App() {
@@ -151,6 +166,7 @@ export default function App() {
           <Route path="feedback"          element={<CustomerFeedback />} />
           <Route path="whatsapp"          element={<WhatsAppNotifications />} />
           <Route path="csv-import"        element={<CsvImport />} />
+          <Route path="data-hub"          element={<DataHub />} />
           <Route path="qr-attendance"          element={<QrAttendance />} />
           <Route path="rm-categories"          element={<RawMaterialCategories />} />
           <Route path="device-management"      element={<DeviceManagement />} />
@@ -212,8 +228,19 @@ export default function App() {
           <Route path="token-queue"       element={<TokenQueueMgmt />} />
           <Route path="kot-print-jobs"    element={<KotPrintJobsMgmt />} />
           <Route path="social-media"      element={<SocialMediaMarketing />} />
+          <Route path="fssai-compliance"  element={<FssaiCompliance />} />
         </Route>
         <Route path="/menu-board/:restaurantId" element={<DigitalMenuBoard />} />
+
+        {/* ── Super Admin Console ── */}
+        <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminLayout /></SuperAdminRoute>}>
+          <Route index              element={<SADashboard />} />
+          <Route path="restaurants" element={<SARestaurants />} />
+          <Route path="subscriptions" element={<SASubscriptions />} />
+          <Route path="addons"      element={<SAAddons />} />
+          <Route path="riders"      element={<SARiders />} />
+        </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -6,21 +6,30 @@ import { fmt, Inp, Chk, Modal, StatusBadge } from './MenuShared'
 
 export default function AddonsTab({ rid }) {
   const toast = useToast()
-  const [groups, setGroups]     = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [modal, setModal]       = useState(null)
-  const [form, setForm]         = useState({})
-  const [options, setOptions]   = useState([{ name:'', price:0, isVeg:true, isActive:true }])
-  const [saving, setSaving]     = useState(false)
-  const [expanded, setExpanded] = useState(null)
+  const [groups,     setGroups]     = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [modal,      setModal]      = useState(null)
+  const [form,       setForm]       = useState({})
+  const [options,    setOptions]    = useState([{ name:'', price:0, isVeg:true, isActive:true }])
+  const [saving,     setSaving]     = useState(false)
+  const [expanded,   setExpanded]   = useState(null)
+  const [localOrder, setLocalOrder] = useState([])  // ordered group IDs
+  const [dragId,     setDragId]     = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { const res = await api.get(`/addon-groups?restaurantId=${rid}`); setGroups(Array.isArray(res)?res:[]) }
+    try { const res = await api.get(`/addon-groups?restaurantId=${rid}`); setGroups(Array.isArray(res) ? res : []) }
     catch (_) { setGroups([]) } finally { setLoading(false) }
   }, [rid])
 
   useEffect(() => { load() }, [])
+
+  // Sync local order from groups (sorted by rank)
+  useEffect(() => {
+    const sorted = [...groups].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
+    setLocalOrder(sorted.map(g => String(g.id)))
+  }, [groups])
 
   function openAdd() {
     setForm({ name:'', description:'', isRequired:false, minSelect:0, maxSelect:1, rank:'', isActive:true })
@@ -40,14 +49,14 @@ export default function AddonsTab({ rid }) {
     try {
       const validOptions = options.filter(o => o.name?.trim())
       const body = {
-        name:        form.name,
-        description: form.description || '',
+        name:         form.name,
+        description:  form.description || '',
         restaurantId: rid,
-        rank:        Number(form.rank) || 1,
-        minSelect:   Number(form.minSelect) || 0,
-        maxSelect:   Number(form.maxSelect) || 1,
-        isRequired:  !!form.isRequired,
-        isActive:    form.isActive !== false,
+        rank:         Number(form.rank) || 1,
+        minSelect:    Number(form.minSelect) || 0,
+        maxSelect:    Number(form.maxSelect) || 1,
+        isRequired:   !!form.isRequired,
+        isActive:     form.isActive !== false,
       }
       if (modal === 'add') {
         const created = await api.post('/addon-groups', body)
@@ -55,11 +64,8 @@ export default function AddonsTab({ rid }) {
         if (groupId && validOptions.length > 0) {
           for (const opt of validOptions) {
             await api.post(`/addon-groups/${groupId}/options`, {
-              name:     opt.name.trim(),
-              price:    Number(opt.price) || 0,
-              isVeg:    opt.isVeg !== false,
-              isActive: opt.isActive !== false,
-              rank:     1,
+              name: opt.name.trim(), price: Number(opt.price) || 0,
+              isVeg: opt.isVeg !== false, isActive: opt.isActive !== false, rank: 1,
             })
           }
         }
@@ -84,6 +90,33 @@ export default function AddonsTab({ rid }) {
   const addOpt  = () => setOptions(os => [...os, { name:'', price:0, isVeg:true, isActive:true }])
   const remOpt  = i  => setOptions(os => os.filter((_, idx) => idx!==i))
 
+  // Drag handlers
+  function onDragStart(e, id) {
+    setDragId(String(id)); e.dataTransfer.effectAllowed = 'move'
+  }
+  function onDragOver(e, id) {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId(String(id))
+  }
+  function onDrop(e, targetId) {
+    e.preventDefault()
+    const fromId = dragId, toId = String(targetId)
+    if (!fromId || fromId === toId) { setDragId(null); setDragOverId(null); return }
+    const newOrder = [...localOrder]
+    const fi = newOrder.indexOf(fromId), ti = newOrder.indexOf(toId)
+    if (fi === -1 || ti === -1) return
+    newOrder.splice(fi, 1); newOrder.splice(ti, 0, fromId)
+    setLocalOrder(newOrder)
+    const byId = Object.fromEntries(groups.map(g => [String(g.id), g]))
+    newOrder.forEach((id, idx) => {
+      const g = byId[id]
+      if (g) api.put(`/addon-groups/${id}`, { ...g, restaurantId: rid, rank: idx + 1 }).catch(() => {})
+    })
+    setDragId(null); setDragOverId(null)
+  }
+
+  const byId = Object.fromEntries(groups.map(g => [String(g.id), g]))
+  const ordered = localOrder.map(id => byId[id]).filter(Boolean)
+
   return (
     <>
       <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'1rem' }}>
@@ -94,41 +127,64 @@ export default function AddonsTab({ rid }) {
       </div>
       {loading ? <SkeletonGrid count={3} height={120} /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {groups.map(g => (
-            <div key={g.id} style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'1rem 1.25rem' }}>
-                <div>
-                  <div style={{ fontSize:14, fontWeight:600, marginBottom:3 }}>{g.name}</div>
-                  <div style={{ fontSize:12, color:'var(--text-muted)' }}>
-                    {g.isRequired?'Required':'Optional'} · Select {g.minSelect||0}–{g.maxSelect||1} · {g.options?.length||0} options
+          {ordered.map(g => {
+            const isDragging = dragId === String(g.id)
+            const isDragOver = dragOverId === String(g.id)
+            return (
+              <div
+                key={g.id}
+                draggable
+                onDragStart={e => onDragStart(e, g.id)}
+                onDragOver={e  => onDragOver(e, g.id)}
+                onDrop={e      => onDrop(e, g.id)}
+                onDragEnd={() => { setDragId(null); setDragOverId(null) }}
+                style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
+                  borderTop: isDragOver ? '2px solid var(--accent)' : '1px solid var(--border)',
+                  opacity: isDragging ? 0.4 : 1,
+                  transition: 'opacity 0.15s, border-color 0.1s',
+                }}
+              >
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'1rem 1.25rem' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    {/* Drag handle */}
+                    <span title="Drag to reorder" style={{
+                      fontSize: 15, cursor: 'grab', color: 'var(--text-muted)', userSelect: 'none', flexShrink: 0,
+                    }}>⠿</span>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:600, marginBottom:3 }}>{g.name}</div>
+                      <div style={{ fontSize:12, color:'var(--text-muted)' }}>
+                        {g.isRequired?'Required':'Optional'} · Select {g.minSelect||0}–{g.maxSelect||1} · {g.options?.length||0} options
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                    <StatusBadge active={g.isActive} />
+                    <button onClick={() => setExpanded(expanded===g.id ? null : g.id)}
+                      style={{ fontSize:12, padding:'4px 8px', borderRadius:6, border:'1px solid var(--border)',
+                        background:'transparent', color:'var(--text-muted)', cursor:'pointer' }}>
+                      {expanded===g.id ? '▲' : '▼'}
+                    </button>
+                    <button onClick={() => openEdit(g)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6,
+                      border:'1px solid var(--border)', background:'transparent', color:'var(--accent)', cursor:'pointer' }}>✏️</button>
+                    <button onClick={() => del(g)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6,
+                      border:'1px solid #ef444440', background:'transparent', color:'#ef4444', cursor:'pointer' }}>🗑️</button>
                   </div>
                 </div>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <StatusBadge active={g.isActive} />
-                  <button onClick={() => setExpanded(expanded===g.id?null:g.id)}
-                    style={{ fontSize:12, padding:'4px 8px', borderRadius:6, border:'1px solid var(--border)',
-                      background:'transparent', color:'var(--text-muted)', cursor:'pointer' }}>
-                    {expanded===g.id?'▲':'▼'}
-                  </button>
-                  <button onClick={() => openEdit(g)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6,
-                    border:'1px solid var(--border)', background:'transparent', color:'var(--accent)', cursor:'pointer' }}>✏️</button>
-                  <button onClick={() => del(g)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6,
-                    border:'1px solid #ef444440', background:'transparent', color:'#ef4444', cursor:'pointer' }}>🗑️</button>
-                </div>
+                {expanded===g.id && g.options?.length > 0 && (
+                  <div style={{ borderTop:'1px solid var(--border)', padding:'0.75rem 1.25rem' }}>
+                    {g.options.map((o, i) => (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                        padding:'6px 0', borderBottom:'1px solid var(--border)' }}>
+                        <span style={{ fontSize:13 }}>{o.isVeg?'🟢':'🔴'} {o.name}</span>
+                        <span style={{ fontSize:13, color:'#10b981', fontWeight:600 }}>{o.price ? fmt(o.price) : 'Free'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {expanded===g.id && g.options?.length > 0 && (
-                <div style={{ borderTop:'1px solid var(--border)', padding:'0.75rem 1.25rem' }}>
-                  {g.options.map((o, i) => (
-                    <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-                      padding:'6px 0', borderBottom:'1px solid var(--border)' }}>
-                      <span style={{ fontSize:13 }}>{o.isVeg?'🟢':'🔴'} {o.name}</span>
-                      <span style={{ fontSize:13, color:'#10b981', fontWeight:600 }}>{o.price?fmt(o.price):'Free'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
       {modal && (

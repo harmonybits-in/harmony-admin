@@ -1,5 +1,5 @@
 // src/pages/Login.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, authApi } from '../api/client'
 import { useAuthStore } from '../store/authStore'
@@ -34,6 +34,15 @@ export default function Login() {
   const [otpSent, setOtpSent]   = useState(false)
   const [error, setError]       = useState('')
   const [showPwd, setShowPwd]   = useState(false)
+  const [sessionMsg, setSessionMsg] = useState('')
+
+  // Show "session expired" banner if redirected from auto-logout
+  useEffect(() => {
+    if (sessionStorage.getItem('auth_expired')) {
+      setSessionMsg('Session expire ho gayi — dobara login karein')
+      sessionStorage.removeItem('auth_expired')
+    }
+  }, [])
 
   const isEmail = identifier.includes('@')
   const isPhone = !isEmail && identifier.replace(/\D/g, '').length >= 10
@@ -102,10 +111,10 @@ export default function Login() {
       navigate('/', { replace: true })
     } catch (err) {
       const msg = err.message || ''
-      if (msg.includes('401') || msg.includes('403') || msg.includes('Invalid'))
-        setError(useOtp ? 'OTP galat hai ya expire ho gaya' : 'Password galat hai')
-      else if (msg.includes('404') || msg.includes('not found'))
+      if (msg.includes('404') || msg.includes('nahi mila') || msg.includes('not found'))
         setError('Account nahi mila — register karein')
+      else if (msg && !msg.match(/^\d+$/))
+        setError(msg)
       else
         setError('Login failed — backend chalu hai?')
     } finally { setLoading(false) }
@@ -129,6 +138,25 @@ export default function Login() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-page)' }}>
       <div style={{ width: 400, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 18, padding: '2.5rem 2rem', boxShadow: '0 8px 32px rgba(0,0,0,0.1)' }}>
+
+        {/* Session expired banner */}
+        {sessionMsg && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: '#f59e0b18', border: '1px solid #f59e0b50',
+            borderRadius: 10, padding: '10px 14px', marginBottom: '1.25rem',
+          }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⏰</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>Session Expire Ho Gayi</div>
+              <div style={{ fontSize: 12, color: '#92400e', marginTop: 2 }}>Dobara login karein — yeh automatically hota hai thodi der baad</div>
+            </div>
+            <button onClick={() => setSessionMsg('')} style={{
+              marginLeft: 'auto', background: 'none', border: 'none',
+              cursor: 'pointer', color: '#d97706', fontSize: 16, flexShrink: 0,
+            }}>✕</button>
+          </div>
+        )}
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>

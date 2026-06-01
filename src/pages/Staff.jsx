@@ -45,6 +45,7 @@ const BLANK = {
   aadharNumber:'', panNumber:'',
   bankAccountNumber:'', ifscCode:'', bankName:'',
   notes:'',
+  passcode:'', confirmPasscode:'',
 }
 
 // ── Role badge ────────────────────────────────────────────────────
@@ -292,33 +293,54 @@ function ManageRolesModal({ rid, onClose, toast }) {
 }
 
 // ── Passcode Modal ────────────────────────────────────────────────
-function PasscodeModal({ staff, onClose, onDone, toast }) {
-  const [pin,     setPin]     = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [saving,  setSaving]  = useState(false)
-  const [show,    setShow]    = useState(false)
+function PasscodeModal({ staff, onClose, onDone, toast, restaurantName }) {
+  const [pin,      setPin]      = useState('')
+  const [confirm,  setConfirm]  = useState('')
+  const [saving,   setSaving]   = useState(false)
+  const [sending,  setSending]  = useState(false)
+  const [show,     setShow]     = useState(false)
+  const [saved,    setSaved]    = useState(false)
 
   const valid = /^\d{4,6}$/.test(pin)
   const match = pin === confirm
 
+  function autoGenerate() {
+    const code = String(Math.floor(1000 + Math.random() * 9000))
+    setPin(code)
+    setConfirm(code)
+    setShow(true)
+  }
+
   async function handleSave(e) {
     e.preventDefault()
-    if (!valid)  return toast.error('Passcode 4-6 digit number hona chahiye')
-    if (!match)  return toast.error('Dono passcode match nahi kar rahe')
+    if (!valid) return toast.error('Passcode 4-6 digit number hona chahiye')
+    if (!match) return toast.error('Dono passcode match nahi kar rahe')
     setSaving(true)
     try {
       await staffApi.setPasscode(staff.id, pin)
       toast.success(`🔑 Passcode set for ${staff.name}`)
-      onDone()
+      setSaved(true)
     } catch (err) {
       toast.error(err.message || 'Failed to set passcode')
     } finally { setSaving(false) }
   }
 
+  async function handleSendWhatsApp() {
+    if (!saved) return toast.error('Pehle passcode save karo')
+    if (!staff.phone) return toast.error('Staff ka phone number nahi hai')
+    setSending(true)
+    try {
+      await staffApi.sendCredentials(staff.id, pin, restaurantName)
+      toast.success(`📲 Credentials WhatsApp pe bhej diye — ${staff.phone}`)
+    } catch (err) {
+      toast.error('WhatsApp send failed')
+    } finally { setSending(false) }
+  }
+
   const inpStyle = {
     width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)',
-    background: 'var(--bg-page)', color: 'var(--text)', fontSize: 20,
-    letterSpacing: 8, textAlign: 'center', fontWeight: 700, boxSizing: 'border-box',
+    background: 'var(--bg-page)', color: 'var(--text)', fontSize: 22,
+    letterSpacing: 10, textAlign: 'center', fontWeight: 700, boxSizing: 'border-box',
   }
 
   return (
@@ -326,42 +348,53 @@ function PasscodeModal({ staff, onClose, onDone, toast }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 28,
-        width: '100%', maxWidth: 360, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
+        width: '100%', maxWidth: 380, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🔑 Set Passcode</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🔑 Staff Login Passcode</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20,
             cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
         </div>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-muted)' }}>
-          <strong style={{ color: 'var(--text)' }}>{staff.name}</strong> ke liye 4-6 digit passcode set karo.
-          Yeh device login ke liye use hoga.
-        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18,
+          padding: '10px 14px', background: 'var(--bg-page)', borderRadius: 8 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+            fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
+            {staff.name?.[0]?.toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{staff.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{staff.phone || 'No phone'} · {staff.role}</div>
+          </div>
+        </div>
 
         <form onSubmit={handleSave}>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
-              New Passcode (4-6 digits)
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={show ? 'text' : 'password'}
-                inputMode="numeric"
-                pattern="\d{4,6}"
-                maxLength={6}
-                value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="••••"
-                style={{ ...inpStyle, borderColor: pin && !valid ? '#ef4444' : 'var(--border)' }}
-                autoFocus
-              />
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                Passcode (4-6 digits)
+              </label>
+              <button type="button" onClick={autoGenerate}
+                style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none',
+                  cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                🎲 Auto Generate
+              </button>
             </div>
-            {pin && !valid && (
-              <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>4 se 6 digits required</div>
-            )}
+            <input
+              type={show ? 'text' : 'password'}
+              inputMode="numeric"
+              maxLength={6}
+              value={pin}
+              onChange={e => { setPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setSaved(false) }}
+              placeholder="••••"
+              style={{ ...inpStyle, borderColor: pin && !valid ? '#ef4444' : 'var(--border)' }}
+              autoFocus
+            />
+            {pin && !valid && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>4-6 digits chahiye</div>}
           </div>
 
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600 }}>
               Confirm Passcode
             </label>
@@ -370,36 +403,42 @@ function PasscodeModal({ staff, onClose, onDone, toast }) {
               inputMode="numeric"
               maxLength={6}
               value={confirm}
-              onChange={e => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={e => { setConfirm(e.target.value.replace(/\D/g, '').slice(0, 6)); setSaved(false) }}
               placeholder="••••"
               style={{ ...inpStyle,
                 borderColor: confirm && !match ? '#ef4444' : confirm && match ? '#10b981' : 'var(--border)' }}
             />
-            {confirm && !match && (
-              <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>Passcode match nahi kar raha</div>
-            )}
-            {confirm && match && valid && (
-              <div style={{ fontSize: 11, color: '#10b981', marginTop: 4 }}>✓ Match</div>
-            )}
+            {confirm && !match && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>Match nahi kar raha</div>}
+            {confirm && match && valid && <div style={{ fontSize: 11, color: '#10b981', marginTop: 4 }}>✓ Match</div>}
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
-            color: 'var(--text-muted)', marginBottom: 20, cursor: 'pointer' }}>
+            color: 'var(--text-muted)', marginBottom: 18, cursor: 'pointer' }}>
             <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} />
-            Show digits
+            Digits dikhao
           </label>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-            <button type="button" onClick={onClose}
-              style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 13 }}>
-              Cancel
-            </button>
+          {saved && (
+            <div style={{ padding: '10px 14px', borderRadius: 8, background: '#d1fae5',
+              fontSize: 13, color: '#065f46', marginBottom: 14, fontWeight: 600 }}>
+              ✅ Passcode saved! Ab WhatsApp pe bhej sakte ho.
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8 }}>
             <button type="submit" disabled={saving || !valid || !match}
-              style={{ padding: '8px 20px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
-                background: saving || !valid || !match ? 'var(--border)' : 'var(--accent)', color: '#fff',
-                cursor: saving || !valid || !match ? 'not-allowed' : 'pointer' }}>
-              {saving ? 'Saving…' : '💾 Save'}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
+                background: saved ? '#10b981' : (saving || !valid || !match) ? 'var(--border)' : 'var(--accent)',
+                color: '#fff', cursor: saving || !valid || !match ? 'not-allowed' : 'pointer' }}>
+              {saving ? 'Saving…' : saved ? '✅ Saved' : '💾 Save Passcode'}
+            </button>
+            <button type="button" onClick={handleSendWhatsApp}
+              disabled={sending || !saved || !staff.phone}
+              title={!staff.phone ? 'Staff ka phone number nahi hai' : ''}
+              style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600,
+                background: sending || !saved || !staff.phone ? 'var(--border)' : '#25D366',
+                color: '#fff', cursor: sending || !saved || !staff.phone ? 'not-allowed' : 'pointer' }}>
+              {sending ? 'Sending…' : '📲 WhatsApp karo'}
             </button>
           </div>
         </form>
@@ -427,6 +466,8 @@ export default function Staff() {
   const [customRoles,    setCustomRoles]    = useState([]) // active custom roles
   const [restOpenTime,   setRestOpenTime]   = useState('09:00')
   const [restCloseTime,  setRestCloseTime]  = useState('21:00')
+  const [restName,       setRestName]       = useState('')
+  const [showPass,       setShowPass]       = useState(false)
 
   // ── Load ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -448,6 +489,7 @@ export default function Staff() {
     api.get(`/restaurants/${rid}`).then(r => {
       if (r?.openTime)  setRestOpenTime(r.openTime)
       if (r?.closeTime) setRestCloseTime(r.closeTime)
+      if (r?.name)      setRestName(r.name)
     }).catch(() => {})
   }, [])
 
@@ -489,6 +531,7 @@ export default function Staff() {
       ifscCode:             s.ifscCode||'',
       bankName:             s.bankName||'',
       notes:                s.notes||'',
+      passcode:'', confirmPasscode:'',
     })
     setEditId(s.id); setTab('basic'); setPanel(true)
   }
@@ -527,13 +570,31 @@ export default function Staff() {
         overtimeMultiplier:   Number(form.overtimeMultiplier)||1.5,
       }
 
+      // Validate passcode if provided
+      if (form.passcode) {
+        if (!/^\d{4,6}$/.test(form.passcode)) {
+          toast.error('Passcode 4-6 digit number hona chahiye'); setSaving(false); return
+        }
+        if (form.passcode !== form.confirmPasscode) {
+          toast.error('Dono passcode match nahi kar rahe'); setSaving(false); return
+        }
+      }
+
+      let savedId = editId
       if (editId) {
         await staffApi.update(editId, body)
-        toast.success('✅ Staff updated!')
       } else {
-        await staffApi.create(body)
-        toast.success('✅ Staff added!')
+        const created = await staffApi.create(body)
+        savedId = created?.id
       }
+
+      // Set passcode if filled
+      if (form.passcode && savedId) {
+        try { await staffApi.setPasscode(savedId, form.passcode) }
+        catch(_) { toast.error('Staff saved but passcode set failed — baad mein try karo') }
+      }
+
+      toast.success(editId ? '✅ Staff updated!' : '✅ Staff added!')
       setPanel(false); load()
     } catch(err) {
       toast.error(editId ? 'Update failed' : 'Add failed — check server')
@@ -844,6 +905,74 @@ export default function Staff() {
                     <FInput label="Emergency Phone" value={form.emergencyContactPhone} onChange={upd('emergencyContactPhone')} type="tel"/>
                   </div>
                   <FInput label="Notes" value={form.notes} onChange={upd('notes')} placeholder="Any special notes..."/>
+
+                  {/* ── PASSCODE SECTION ── */}
+                  <div style={{ marginTop:4, padding:'14px 14px 10px', borderRadius:10,
+                    border:'1px solid #863bff44', background:'#863bff08' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                      <span style={{ fontSize:12, fontWeight:700, color:'#863bff' }}>
+                        🔑 Login Passcode (Mobile App)
+                      </span>
+                      <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                        {editId ? 'Blank raho = change nahi hoga' : 'Optional — baad mein bhi set kar sakte ho'}
+                      </span>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
+                      <div style={{ marginBottom:12, position:'relative' }}>
+                        <label style={{ display:'block', fontSize:11, color:'var(--text-muted)', marginBottom:4, fontWeight:500 }}>
+                          Passcode <span style={{ fontSize:10, fontWeight:400 }}>(4-6 digits)</span>
+                        </label>
+                        <div style={{ position:'relative' }}>
+                          <input
+                            type={showPass ? 'text' : 'password'}
+                            value={form.passcode}
+                            onChange={upd('passcode')}
+                            placeholder="e.g. 1234"
+                            maxLength={6}
+                            inputMode="numeric"
+                            style={{ width:'100%', padding:'8px 36px 8px 10px', borderRadius:7,
+                              border:'1px solid var(--border)', background:'var(--bg-page)',
+                              color:'var(--text)', fontSize:13, boxSizing:'border-box' }}
+                          />
+                          <button type="button" onClick={() => setShowPass(p => !p)}
+                            style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                              background:'none', border:'none', cursor:'pointer', fontSize:14,
+                              color:'var(--text-muted)', padding:0 }}>
+                            {showPass ? '🙈' : '👁️'}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom:12 }}>
+                        <label style={{ display:'block', fontSize:11, color:'var(--text-muted)', marginBottom:4, fontWeight:500 }}>
+                          Confirm Passcode
+                        </label>
+                        <input
+                          type={showPass ? 'text' : 'password'}
+                          value={form.confirmPasscode}
+                          onChange={upd('confirmPasscode')}
+                          placeholder="Re-enter passcode"
+                          maxLength={6}
+                          inputMode="numeric"
+                          style={{ width:'100%', padding:'8px 10px', borderRadius:7,
+                            border: form.confirmPasscode && form.passcode !== form.confirmPasscode
+                              ? '1px solid #ef4444' : '1px solid var(--border)',
+                            background:'var(--bg-page)', color:'var(--text)',
+                            fontSize:13, boxSizing:'border-box' }}
+                        />
+                        {form.confirmPasscode && form.passcode !== form.confirmPasscode && (
+                          <div style={{ fontSize:10, color:'#ef4444', marginTop:3 }}>Match nahi kar raha</div>
+                        )}
+                        {form.confirmPasscode && form.passcode === form.confirmPasscode && form.passcode && (
+                          <div style={{ fontSize:10, color:'#10b981', marginTop:3 }}>✓ Match!</div>
+                        )}
+                      </div>
+                    </div>
+                    {form.passcode && (
+                      <div style={{ fontSize:11, color:'#863bff', marginTop:-4 }}>
+                        💡 Save karne ke baad yahi passcode staff mobile app mein use karega
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -1033,6 +1162,7 @@ export default function Staff() {
         <PasscodeModal
           staff={passcodeTarget}
           toast={toast}
+          restaurantName={restName}
           onClose={() => setPasscodeTarget(null)}
           onDone={() => setPasscodeTarget(null)}
         />

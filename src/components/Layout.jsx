@@ -2,8 +2,9 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useCallback, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { leaveApi, chatbotApi } from '../api/client'
+import { leaveApi, chatbotApi, subscriptionApi } from '../api/client'
 import ErrorBoundary from './ErrorBoundary'
+import { canAccess, PLAN_LABEL } from '../utils/planAccess'
 
 function useOnlineStatus() {
   const [online, setOnline] = useState(navigator.onLine)
@@ -33,109 +34,112 @@ const FULL_PAGE_PATHS = [
 
 // ── Grouped nav structure ─────────────────────────────────────────
 const NAV_GROUPS = [
-  // Always-visible pinned items (no group header)
   {
     key: '_pin', pinned: true,
     items: [
-      { to: '/',       icon: '⊞',  label: 'Dashboard', end: true },
+      { to: '/', icon: '⊞', label: 'Dashboard', end: true },
     ],
   },
   {
     key: 'sales', label: 'Sales',
     items: [
-      { to: '/bills',         icon: '🧾', label: 'Bills'           },
-      { to: '/online-orders', icon: '📱', label: 'Online Orders'   },
-      { to: '/delivery',        icon: '🛵', label: 'Delivery Orders' },
-      { to: '/delivery-zones',  icon: '📍', label: 'Delivery Zones'  },
-      { to: '/pre-orders',      icon: '📅', label: 'Pre-Orders'       },
-      { to: '/due-payments',    icon: '💳', label: 'Due Payments'     },
+      { to: '/bills',          icon: '🧾', label: 'Bills'           },
+      { to: '/online-orders',  icon: '📱', label: 'Online Orders',   plan: 'GROWTH' },
+      { to: '/delivery',       icon: '🛵', label: 'Delivery Orders', plan: 'GROWTH' },
+      { to: '/delivery-zones', icon: '📍', label: 'Delivery Zones',  plan: 'GROWTH' },
+      { to: '/pre-orders',     icon: '📅', label: 'Pre-Orders',      plan: 'GROWTH' },
+      { to: '/due-payments',   icon: '💳', label: 'Due Payments',    plan: 'GROWTH' },
     ],
   },
   {
     key: 'customers', label: 'Customers',
     items: [
-      { to: '/customers', icon: '👥', label: 'Customers'     },
-      { to: '/loyalty',   icon: '⭐', label: 'Loyalty Points'},
-      { to: '/feedback',  icon: '💬', label: 'Feedback'      },
-      { to: '/chatbot',       icon: '🤖', label: 'Chatbot',        badge: 'chatbot' },
-      { to: '/sms-marketing',  icon: '📨', label: 'SMS Marketing'   },
-      { to: '/social-media',  icon: '📣', label: 'Social Media'    },
-      { to: '/gift-cards',    icon: '🎁', label: 'Gift Cards'      },
+      { to: '/customers',     icon: '👥', label: 'Customers',      plan: 'STARTER' },
+      { to: '/loyalty',       icon: '⭐', label: 'Loyalty Points', plan: 'GROWTH'  },
+      { to: '/feedback',      icon: '💬', label: 'Feedback',       plan: 'GROWTH'  },
+      { to: '/chatbot',       icon: '🤖', label: 'Chatbot',        plan: 'GROWTH',  badge: 'chatbot' },
+      { to: '/sms-marketing', icon: '📨', label: 'SMS Marketing',  plan: 'GROWTH'  },
+      { to: '/social-media',  icon: '📣', label: 'Social Media',   plan: 'GROWTH'  },
+      { to: '/gift-cards',    icon: '🎁', label: 'Gift Cards',     plan: 'GROWTH'  },
     ],
   },
   {
     key: 'menu', label: 'Menu',
     items: [
-      { to: '/menu',            icon: '🍽️', label: 'Menu Items'       },
-      { to: '/item-86',         icon: '🔴', label: 'Item 86'           },
-      { to: '/menu-categories', icon: '📋', label: 'Categories'        },
-      { to: '/menu-config',     icon: '🍕', label: 'Addons & Variants' },
-      { to: '/promotions',    icon: '🎁', label: 'Promotions'        },
-      { to: '/discounts',     icon: '🏷️', label: 'Discounts'         },
-      { to: '/coupons',       icon: '🎟️', label: 'Coupons'           },
-      { to: '/tax-config',    icon: '🧾', label: 'Tax Config'        },
-      { to: '/rm-categories', icon: '🗂️', label: 'RM Categories'     },
-      { to: '/csv-import',    icon: '📥', label: 'CSV Import'        },
+      { to: '/menu',            icon: '🍽️', label: 'Menu Items'                  },
+      { to: '/item-86',         icon: '🔴', label: 'Item 86',      plan: 'GROWTH' },
+      { to: '/menu-categories', icon: '📋', label: 'Categories'                   },
+      { to: '/menu-config',     icon: '🍕', label: 'Addons & Variants', plan: 'STARTER' },
+      { to: '/promotions',      icon: '🎁', label: 'Promotions',   plan: 'STARTER' },
+      { to: '/discounts',       icon: '🏷️', label: 'Discounts',    plan: 'STARTER' },
+      { to: '/coupons',         icon: '🎟️', label: 'Coupons',      plan: 'STARTER' },
+      { to: '/tax-config',      icon: '🧾', label: 'Tax Config',   plan: 'STARTER' },
+      { to: '/rm-categories',   icon: '🗂️', label: 'RM Categories', plan: 'STARTER' },
+      { to: '/csv-import',      icon: '📥', label: 'CSV Import',   plan: 'STARTER' },
+      { to: '/data-hub',        icon: '📊', label: 'Data Hub',     plan: 'STARTER' },
     ],
   },
   {
     key: 'staff', label: 'Staff',
     items: [
-      { to: '/staff',          icon: '👤', label: 'Staff'           },
-      { to: '/roster',         icon: '📅', label: 'Roster'          },
-      { to: '/attendance',     icon: '📋', label: 'Attendance'      },
-      { to: '/qr-attendance',  icon: '📲', label: 'QR Attendance'   },
-      { to: '/payroll',        icon: '💰', label: 'Payroll'         },
-      { to: '/staff-payments', icon: '💸', label: 'Staff Payments'  },
-      { to: '/leave',          icon: '🏖️', label: 'Leave Management', badge: 'leave' },
+      { to: '/staff',          icon: '👤', label: 'Staff',            plan: 'STARTER' },
+      { to: '/roster',         icon: '📅', label: 'Roster',           plan: 'STARTER' },
+      { to: '/attendance',     icon: '📋', label: 'Attendance',       plan: 'STARTER' },
+      { to: '/qr-attendance',  icon: '📲', label: 'QR Attendance',    plan: 'STARTER' },
+      { to: '/payroll',        icon: '💰', label: 'Payroll',          plan: 'STARTER' },
+      { to: '/staff-payments', icon: '💸', label: 'Staff Payments',   plan: 'STARTER' },
+      { to: '/leave',          icon: '🏖️', label: 'Leave Management', plan: 'STARTER', badge: 'leave' },
     ],
   },
   {
     key: 'tables', label: 'Dine-in',
     items: [
-      { to: '/tables',       icon: '🪑', label: 'Table Management' },
-      { to: '/reservations', icon: '📅', label: 'Reservations'     },
+      { to: '/tables',       icon: '🪑', label: 'Table Management', plan: 'STARTER' },
+      { to: '/reservations', icon: '📅', label: 'Reservations',     plan: 'STARTER' },
     ],
   },
   {
     key: 'finance', label: 'Finance',
     items: [
-      { to: '/cash-register', icon: '🏪', label: 'Cash Register'        },
-      { to: '/expenses',      icon: '💸', label: 'Expenses'              },
-      { to: '/refunds',       icon: '↩️', label: 'Refunds & Credit Notes'},
+      { to: '/cash-register', icon: '🏪', label: 'Cash Register',         plan: 'STARTER' },
+      { to: '/expenses',      icon: '💸', label: 'Expenses',               plan: 'STARTER' },
+      { to: '/refunds',       icon: '↩️', label: 'Refunds & Credit Notes', plan: 'GROWTH'  },
     ],
   },
   {
     key: 'analytics', label: 'Analytics',
     items: [
-      { to: '/reports',          icon: '📊', label: 'Reports'         },
-      { to: '/gst-reports',     icon: '🧾', label: 'GST Reports'     },
-      { to: '/pnl-report',      icon: '📈', label: 'P&L Statement'   },
-      { to: '/food-cost-report', icon: '🍳', label: 'Food Cost %'    },
+      { to: '/reports',           icon: '📊', label: 'Reports'         },
+      { to: '/gst-reports',       icon: '🧾', label: 'GST Reports',    plan: 'GROWTH' },
+      { to: '/pnl-report',        icon: '📈', label: 'P&L Statement',  plan: 'GROWTH' },
+      { to: '/food-cost-report',  icon: '🍳', label: 'Food Cost %',    plan: 'GROWTH' },
+      { to: '/staff-performance', icon: '🏆', label: 'Staff Performance', plan: 'PRO'  },
+      { to: '/predictive-analytics', icon: '🔮', label: 'Predictive AI', plan: 'PRO'  },
     ],
   },
   {
     key: 'tools', label: 'Tools',
     items: [
-      { to: '/whatsapp',          icon: '💬',   label: 'WhatsApp'              },
-      { to: '/aggregator',        icon: '🍽️',  label: 'Zomato / Swiggy Sync' },
-      { to: '/direct-aggregator', icon: '⚡',   label: 'Direct Aggregator'    },
-      { to: '/kitchen-display',   icon: '👨‍🍳', label: 'Web Kitchen Display'  },
+      { to: '/whatsapp',          icon: '💬',   label: 'WhatsApp',              plan: 'GROWTH' },
+      { to: '/aggregator',        icon: '🍽️',  label: 'Zomato / Swiggy Sync',  plan: 'GROWTH' },
+      { to: '/direct-aggregator', icon: '⚡',   label: 'Direct Aggregator',     plan: 'GROWTH' },
+      { to: '/kitchen-display',   icon: '👨‍🍳', label: 'Web Kitchen Display',   plan: 'STARTER' },
     ],
   },
   {
     key: 'settings', label: 'Settings',
     items: [
-      { to: '/settings',          icon: '⚙️', label: 'Settings'          },
-      { to: '/subscription',      icon: '💳', label: 'Subscription'      },
-      { to: '/restaurants',       icon: '🏪', label: 'Restaurants'       },
-      { to: '/riders',            icon: '🛵', label: 'Rider Tracking'    },
-      { to: '/device-management', icon: '📱', label: 'Device Management' },
-      { to: '/referrals',         icon: '🎁', label: 'Referrals'         },
-      { to: '/service-agreement', icon: '📄', label: 'Service Agreement' },
-      { to: '/audit-log',         icon: '🔍', label: 'Audit Log'         },
-      { to: '/franchise-royalty',         icon: '🏢', label: 'Franchise Royalty'         },
-      { to: '/aggregator-reconciliation', icon: '🔁', label: 'Aggregator Reconciliation' },
+      { to: '/settings',                    icon: '⚙️', label: 'Settings'                },
+      { to: '/subscription',                icon: '💳', label: 'Subscription'            },
+      { to: '/restaurants',                 icon: '🏪', label: 'Restaurants',  plan: 'GROWTH' },
+      { to: '/riders',                      icon: '🛵', label: 'Rider Tracking', plan: 'GROWTH' },
+      { to: '/device-management',           icon: '📱', label: 'Device Management', plan: 'STARTER' },
+      { to: '/referrals',                   icon: '🎁', label: 'Referrals'               },
+      { to: '/service-agreement',           icon: '📄', label: 'Service Agreement'       },
+      { to: '/audit-log',                   icon: '🔍', label: 'Audit Log',    plan: 'PRO' },
+      { to: '/franchise-royalty',           icon: '🏢', label: 'Franchise Royalty', plan: 'PRO' },
+      { to: '/aggregator-reconciliation',   icon: '🔁', label: 'Aggregator Reconciliation', plan: 'GROWTH' },
+      { to: '/fssai-compliance',            icon: '🛡️', label: 'FSSAI Compliance', plan: 'STARTER' },
     ],
   },
 ]
@@ -373,7 +377,8 @@ function InventorySidebar() {
 }
 
 // ── Grouped Nav (non-inventory) ───────────────────────────────────
-function GroupedNav({ location, leavePendingCount, chatbotTodayCount }) {
+function GroupedNav({ location, leavePendingCount, chatbotTodayCount, planType, userRole }) {
+  const navigate = useNavigate()
   const [openGroups, setOpenGroups] = useState(() => {
     const open = new Set()
     NAV_GROUPS.forEach(g => {
@@ -412,8 +417,12 @@ function GroupedNav({ location, leavePendingCount, chatbotTodayCount }) {
           ))
         }
 
+        const accessibleItems = group.items?.filter(item => canAccess(item.plan, planType, userRole))
+        const lockedItems     = group.items?.filter(item => !canAccess(item.plan, planType, userRole))
+        const visibleItems    = accessibleItems || []
+
         const isOpen    = openGroups.has(group.key)
-        const hasActive = group.items?.some(item =>
+        const hasActive = visibleItems.some(item =>
           item.end
             ? location.pathname === item.to
             : location.pathname === item.to || location.pathname.startsWith(item.to + '/')
@@ -437,8 +446,8 @@ function GroupedNav({ location, leavePendingCount, chatbotTodayCount }) {
                 transition: 'transform .15s' }}>›</span>
             </button>
 
-            {/* Items */}
-            {isOpen && group.items.map(({ to, icon, label, end, badge }) => (
+            {/* Accessible items */}
+            {isOpen && visibleItems.map(({ to, icon, label, end, badge }) => (
               <NavLink key={to} to={to} end={end}
                 style={({ isActive }) => ({
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -467,6 +476,22 @@ function GroupedNav({ location, leavePendingCount, chatbotTodayCount }) {
                   }}>{chatbotTodayCount > 9 ? '9+' : chatbotTodayCount}</span>
                 )}
               </NavLink>
+            ))}
+
+            {/* Locked items — greyed out with upgrade hint */}
+            {isOpen && lockedItems.length > 0 && lockedItems.map(({ to, icon, label, plan }) => (
+              <button key={to} onClick={() => navigate('/subscription')} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 14px 8px 18px', border: 'none', background: 'transparent',
+                cursor: 'pointer', fontSize: 12, color: '#bbb', textAlign: 'left',
+              }}>
+                <span style={{ fontSize: 13, opacity: 0.5 }}>{icon}</span>
+                <span style={{ flex: 1, opacity: 0.5 }}>{label}</span>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
+                  background: '#f59e0b22', color: '#f59e0b', whiteSpace: 'nowrap',
+                }}>{PLAN_LABEL[plan] || plan}</span>
+              </button>
             ))}
           </div>
         )
@@ -506,7 +531,7 @@ function MainContent() {
 
 // ════════════════════════════════════════════════════════════════
 export default function Layout() {
-  const { user, logout, restaurantId } = useAuthStore()
+  const { user, logout, restaurantId, planType, setPlanType } = useAuthStore()
   const navigate  = useNavigate()
   const location  = useLocation()
   const [leavePendingCount, setLeavePendingCount] = useState(0)
@@ -522,7 +547,12 @@ export default function Layout() {
     chatbotApi.getStats(restaurantId)
       .then(res => setChatbotTodayCount(res?.todaySessions || 0))
       .catch(() => setChatbotTodayCount(0))
-  }, [restaurantId, location.pathname])
+    subscriptionApi.getStatus(restaurantId)
+      .then(sub => {
+        if (sub?.plan) setPlanType(sub.plan)
+      })
+      .catch(() => {})
+  }, [restaurantId])
 
   function handleLogout() {
     logout()
@@ -550,7 +580,13 @@ export default function Layout() {
         <nav style={{ flex: 1, padding: '0.25rem 0' }}>
 
           {/* Grouped nav */}
-          <GroupedNav location={location} leavePendingCount={leavePendingCount} chatbotTodayCount={chatbotTodayCount} />
+          <GroupedNav
+            location={location}
+            leavePendingCount={leavePendingCount}
+            chatbotTodayCount={chatbotTodayCount}
+            planType={planType}
+            userRole={user?.role}
+          />
 
           {/* ── Inventory parent link + expandable sidebar ── */}
           <div>
@@ -585,6 +621,19 @@ export default function Layout() {
             )}
           </div>
         </nav>
+
+        {/* ── Super Admin Console link (SUPER_ADMIN only) ── */}
+        {user?.role === 'SUPER_ADMIN' && (
+          <NavLink to="/superadmin" style={({ isActive }) => ({
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 14px', textDecoration: 'none',
+            fontSize: 12, fontWeight: 700,
+            color: '#fff', background: '#863bff',
+            borderRadius: 0,
+          })}>
+            <span>🛡️</span> Super Admin Console
+          </NavLink>
+        )}
 
         {/* ── User ── */}
         <div style={{

@@ -16,11 +16,13 @@ const MOCK_RESTAURANTS = [
   { id: 5, restaurantId: 'REST005', name: 'Punjabi Dhaba', ownerName: 'Gurpreet Singh', email: 'punjabi@gmail.com', phone: '9876543214', city: 'Chandigarh',planType: 'GROWTH',     isActive: true,  createdAt: '2024-04-18' },
 ]
 
-const PLAN_TYPES = ['TRIAL', 'STARTER', 'GROWTH', 'ENTERPRISE']
+const PLAN_TYPES = ['TRIAL', 'FREE', 'STARTER', 'GROWTH', 'PRO', 'ENTERPRISE']
 const PLAN_CFG   = {
   TRIAL:      { color: '#f59e0b', bg: '#fef3c7' },
+  FREE:       { color: '#16a34a', bg: '#dcfce7' },
   STARTER:    { color: '#6366f1', bg: '#ede9fe' },
   GROWTH:     { color: '#10b981', bg: '#d1fae5' },
+  PRO:        { color: '#863bff', bg: '#f3e8ff' },
   ENTERPRISE: { color: '#e53e3e', bg: '#fee2e2' },
 }
 
@@ -466,17 +468,22 @@ function StatsModal({ restaurant, onClose, onRefresh }) {
 
   const PLAN_OPTIONS = [
     { value: 'TRIAL',              label: 'Trial (14 days free)' },
-    { value: 'STARTER_MONTHLY',    label: 'Starter Monthly (₹999)' },
-    { value: 'STARTER_YEARLY',     label: 'Starter Yearly (₹9,599)' },
+    { value: 'FREE',               label: 'Free (₹0 forever)' },
+    { value: 'STARTER_MONTHLY',    label: 'Starter Monthly (₹799)' },
+    { value: 'STARTER_YEARLY',     label: 'Starter Yearly (₹7,599)' },
     { value: 'GROWTH_MONTHLY',     label: 'Growth Monthly (₹1,999)' },
     { value: 'GROWTH_YEARLY',      label: 'Growth Yearly (₹17,999)' },
-    { value: 'ENTERPRISE_MONTHLY', label: 'Enterprise Monthly (₹3,499)' },
-    { value: 'ENTERPRISE_YEARLY',  label: 'Enterprise Yearly (₹29,399)' },
+    { value: 'PRO_MONTHLY',        label: 'Pro Monthly (₹3,499)' },
+    { value: 'PRO_YEARLY',         label: 'Pro Yearly (₹34,990) — 2 months FREE' },
+    { value: 'ENTERPRISE_MONTHLY', label: 'Enterprise Monthly (₹4,999)' },
+    { value: 'ENTERPRISE_YEARLY',  label: 'Enterprise Yearly (₹41,990)' },
   ]
 
   const planDefaultDays = {
-    TRIAL: 14, STARTER_MONTHLY: 30, STARTER_YEARLY: 365,
+    TRIAL: 14, FREE: 36500,
+    STARTER_MONTHLY: 30, STARTER_YEARLY: 365,
     GROWTH_MONTHLY: 30, GROWTH_YEARLY: 365,
+    PRO_MONTHLY: 30, PRO_YEARLY: 365,
     ENTERPRISE_MONTHLY: 30, ENTERPRISE_YEARLY: 365,
   }
 

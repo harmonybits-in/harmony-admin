@@ -5,6 +5,22 @@ function getToken() {
   return localStorage.getItem('harmoney_token') || ''
 }
 
+// ── Auth failure guard — prevents multiple redirects from parallel requests ──
+let _authRedirectPending = false
+
+function forceLogout() {
+  if (_authRedirectPending) return
+  _authRedirectPending = true
+  // Clear all auth state (mirrors authStore.logout)
+  localStorage.removeItem('harmoney_token')
+  localStorage.removeItem('harmoney_user')
+  localStorage.removeItem('harmoney_rid')
+  localStorage.removeItem('harmoney_plan')
+  // Flag for Login page to show "session expired" banner
+  sessionStorage.setItem('auth_expired', '1')
+  window.location.href = '/login'
+}
+
 async function request(path, opts = {}) {
   const res = await fetch(BASE + path, {
     ...opts,
@@ -14,11 +30,14 @@ async function request(path, opts = {}) {
       ...opts.headers,
     },
   })
-  if (res.status === 401) {
-    localStorage.removeItem('harmoney_token')
-    window.location.href = '/login'
+
+  // 401 = token missing/invalid, 403 = token expired (Spring Security stateless)
+  // Both mean the session is dead — logout and redirect
+  if (res.status === 401 || res.status === 403) {
+    forceLogout()
     return null
   }
+
   if (!res.ok) {
     let msg = `${res.status}`
     try {
@@ -72,6 +91,7 @@ export const staffApi = {
   deactivate:            (id) => api.delete(`/staff/${id}`),
   setAttendancePermission: (id, allowed) => api.patch(`/staff/${id}/attendance-permission?allowed=${allowed}`),
   setPasscode:             (id, passcode) => api.patch(`/staff/${id}/passcode`, { passcode }),
+  sendCredentials:         (id, passcode, restaurantName) => api.post(`/staff/${id}/send-credentials`, { passcode, restaurantName }),
 }
 
 // ── Staff Custom Roles ───────────────────────────────────────────
@@ -338,6 +358,8 @@ export const reportApi = {
   staffPerformance:(from, to)           => api.get(`/reports/staff/performance?from=${from}&to=${to}`),
   pnl:             (from, to)           => api.get(`/reports/pnl?from=${from}&to=${to}`),
   foodCost:        (from, to)           => api.get(`/reports/food-cost?from=${from}&to=${to}`),
+  foodCostCalculator: (from, to, aggregatorPct = 0) =>
+    api.get(`/reports/food-cost-calculator?from=${from}&to=${to}&aggregatorPct=${aggregatorPct}`),
 }
 
 // ── Gift Cards ────────────────────────────────────────────────────
@@ -636,6 +658,101 @@ export const kotPrintJobApi = {
   trigger: (rid, body)     => api.post('/kot-print-jobs/trigger', body),
 }
 
+// ── Export API ───────────────────────────────────────────────────
+export const exportApi = {
+  bills: (from, to) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    return fetch(`${base}/export/bills?from=${from}&to=${to}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  },
+  menu: () => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    return fetch(`${base}/export/menu`, { headers: { Authorization: `Bearer ${token}` } })
+  },
+  customers: () => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    return fetch(`${base}/export/customers`, { headers: { Authorization: `Bearer ${token}` } })
+  },
+  rawMaterials: () => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    return fetch(`${base}/export/raw-materials`, { headers: { Authorization: `Bearer ${token}` } })
+  },
+  staff: () => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    return fetch(`${base}/export/staff`, { headers: { Authorization: `Bearer ${token}` } })
+  },
+}
+
+// ── Data Import API ───────────────────────────────────────────────
+export const dataImportApi = {
+  importRawMaterials: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/raw-materials`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    })
+  },
+  importCustomers: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/customers`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    })
+  },
+  importCategories: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData(); fd.append('file', file); fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/categories`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+  },
+  importRmCategories: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData(); fd.append('file', file); fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/rm-categories`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+  },
+  importUnits: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData(); fd.append('file', file); fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/units`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+  },
+  importTables: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData(); fd.append('file', file); fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/tables`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+  },
+  importAreas: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData(); fd.append('file', file); fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/areas`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+  },
+  importProducts: (file, restaurantId) => {
+    const token = localStorage.getItem('harmoney_token') || ''
+    const base  = (import.meta.env.VITE_API_URL || 'http://localhost:2026') + '/api/v1'
+    const fd = new FormData(); fd.append('file', file); fd.append('restaurantId', restaurantId)
+    return fetch(`${base}/import/products`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })
+  },
+}
+
 // ── Google Food Ordering ──────────────────────────────────────────
 export const googleFoodApi = {
   getConfig:    (rid)       => api.get('/google-food/config'),
@@ -655,4 +772,26 @@ export const cameraApi = {
 export const tableOpsApi = {
   merge: (rid, fromId, toId) => api.post(`/tables/merge?fromTableId=${fromId}&toTableId=${toId}`, {}),
   split: (rid, id)           => api.post(`/tables/${id}/split`, {}),
+}
+
+// ── FSSAI Compliance ──────────────────────────────────────────────
+export const fssaiApi = {
+  dashboard:       ()          => api.get('/fssai/dashboard'),
+  getDashboard:    ()          => api.get('/fssai/dashboard'),
+  getLicense:      ()          => api.get('/fssai/license'),
+  saveLicense:     (body)      => api.put('/fssai/license', body),
+  getTempLogs:     (days = 7)  => api.get(`/fssai/temperature?days=${days}`),
+  logTemp:         (body)      => api.post('/fssai/temperature', body),
+  logTemperature:  (body)      => api.post('/fssai/temperature', body),
+  getCleaningLogs: (days = 7)  => api.get(`/fssai/cleaning?days=${days}`),
+  logCleaning:     (body)      => api.post('/fssai/cleaning', body),
+  getChecklist:    ()          => api.get('/fssai/audit/checklist'),
+  startAudit:      (body)      => api.post('/fssai/audit/start', body),
+  updateAudit:     (id, items) => api.put(`/fssai/audit/${id}`, items),
+  completeAudit:   (id)        => api.post(`/fssai/audit/${id}/complete`, {}),
+  getAudit:        (id)        => api.get(`/fssai/audit/${id}`),
+  getAuditSession: (id)        => api.get(`/fssai/audit/${id}`),
+  getAuditHistory: ()          => api.get('/fssai/audit/history'),
+  getStaffHealth:  ()          => api.get('/fssai/staff-health'),
+  saveStaffHealth: (body)      => api.post('/fssai/staff-health', body),
 }

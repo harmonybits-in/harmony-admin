@@ -72,7 +72,7 @@ export default function SearchSelect({ value, onChange, options, placeholder, ge
                 <span style={{ width:14, fontSize:11, color:'#e53e3e' }}>{o.id===value?'✓':''}</span>
                 <div>
                   <div style={{ fontSize:13 }}>{getLabel(o)}</div>
-                  {o.category && <div style={{ fontSize:11, color:'#aaa' }}>{o.category}</div>}
+                  {o.category && <div style={{ fontSize:11, color:'#aaa' }}>{typeof o.category === 'object' ? o.category?.name : o.category}</div>}
                 </div>
               </button>
             ))}
