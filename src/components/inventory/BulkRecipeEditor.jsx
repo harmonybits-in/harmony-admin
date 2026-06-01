@@ -1,5 +1,6 @@
 // src/components/inventory/BulkRecipeEditor.jsx
 import { useState, useRef, useEffect } from 'react'
+import * as XLSX from 'xlsx'
 import { api } from '../../api/client'
 import { useToast } from '../../hooks/useToast'
 
@@ -204,47 +205,55 @@ export default function BulkRecipeEditor({ rawMaterials, recipes, products, catB
     })
   }
 
-  // ── UPDATE MODE: Download sheet pre-filled with current recipe data ────────
+  // ── UPDATE MODE: Download XLSX sheet (Petpooja format) ───────────────────
   function downloadSheet() {
     const filteredProds = filterProducts()
-    const maxRm = 10
-    const rmHeaders = Array.from({ length: maxRm }, (_, i) =>
-      `<th>RawMaterial${i+1}</th><th>Qty${i+1}</th><th>Unit${i+1}</th><th>Area${i+1}</th>`
-    ).join('')
+    const MAX_RM = 15   // 15 groups × 3 cols = 45 + 3 info = 48 cols (matches Petpooja)
 
-    const rows = filteredProds.map(p => {
-      // Find existing recipe for this product (base, no variant)
+    // Header row — repeating RawMaterial | Qty | Unit
+    const header = ['ItemID', 'ItemName', 'ItemType']
+    for (let i = 0; i < MAX_RM; i++) {
+      header.push('RawMaterial', 'Qty', 'Unit')
+    }
+
+    const dataRows = filteredProds.map(p => {
       const rec = recipes.find(r => r.productId === p.id && !r.variantId)
-      let ings = rec?.ingredients || []
+      let ings   = rec?.ingredients || []
 
-      // If RM filter is active, only include matching ingredients
+      // If RM filter active → keep only matching ingredients first, then rest
       if (selRmIds.length > 0) {
-        ings = ings.filter(ing => selRmIds.includes(ing.rawMaterialId))
+        const matched   = ings.filter(ing => selRmIds.includes(ing.rawMaterialId))
+        const unmatched = ings.filter(ing => !selRmIds.includes(ing.rawMaterialId))
+        ings = [...matched, ...unmatched]
       }
 
-      const rmCols = Array.from({ length: maxRm }, (_, i) => {
+      const row = [`0x${p.id}`, p.name, 'Item']
+      for (let i = 0; i < MAX_RM; i++) {
         const ing = ings[i]
-        if (!ing) return '<td></td><td></td><td></td><td></td>'
-        const areas = Array.isArray(ing.areas) ? ing.areas.join(',') : (ing.areas || '')
-        return `<td>${ing.rawMaterialName || ''}</td><td>${ing.quantity || ''}</td><td>${ing.unit || ''}</td><td>${areas}</td>`
-      }).join('')
+        row.push(
+          ing?.rawMaterialName || '',
+          ing ? Number(ing.quantity) : '',
+          ing?.unit || '',
+        )
+      }
+      return row
+    })
 
-      const catName = getCatName(p.category)
-      return `<tr><td>0x${p.id}</td><td>${p.name}</td><td>Item</td><td>${catName}</td><td></td><td>Active</td>${rmCols}</tr>`
-    }).join('')
+    const wsData  = [header, ...dataRows]
+    const ws      = XLSX.utils.aoa_to_sheet(wsData)
 
-    const html = `<html><head><meta charset="UTF-8"></head><body><table border="1">
-<tr><th>ItemID</th><th>ItemName</th><th>ItemType</th><th>AddonArea</th><th>SapCode</th><th>ItemStatus</th>${rmHeaders}</tr>
-${rows}
-</table></body></html>`
+    // Column widths
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 30 }, { wch: 8 },
+      ...Array.from({ length: MAX_RM * 3 }, (_, i) =>
+        ({ wch: i % 3 === 0 ? 22 : i % 3 === 1 ? 8 : 10 })
+      ),
+    ]
 
-    const blob = new Blob([html], { type:'application/vnd.ms-excel' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href = url
-    a.download = 'Bulk_Recipe_Edit.xls'
-    a.click()
-    URL.revokeObjectURL(url)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Recipes')
+    XLSX.writeFile(wb, 'Bulk_Recipe_Edit.xlsx')
+
     toast.success(`Sheet downloaded — ${filteredProds.length} items`)
   }
 
