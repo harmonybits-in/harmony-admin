@@ -153,13 +153,27 @@ export default function ItemRecipes() {
     const rmHeaders = Array.from({ length: maxRm }, (_, i) =>
       `<th>RawMaterial${i+1}</th><th>Qty${i+1}</th><th>Unit${i+1}</th><th>Area${i+1}</th>`
     ).join('')
-    const sampleRows = products.slice(0, 5).map(p => {
+
+    // Example row to guide users
+    const exampleCols = ['Potato', '100', 'gm', 'Kitchen',
+                         'Cheese', '50', 'gm', '',
+                         ...Array.from({ length: (maxRm - 2) * 4 }, () => '')]
+      .map(v => `<td>${v}</td>`).join('')
+    const exampleRow = `<tr style="background:#fffbe6">
+      <td>0x1</td><td>Example Item Name</td><td>Item</td><td></td><td></td><td>Active</td>${exampleCols}
+    </tr>`
+
+    // All products (not just first 5)
+    const productRows = products.map(p => {
       const emptyCols = Array.from({ length: maxRm * 4 }, () => '<td></td>').join('')
-      return `<tr><td>0x${p.id}</td><td>${p.name}</td><td>Item</td><td></td><td></td><td>Active</td>${emptyCols}</tr>`
+      const catName = typeof p.category === 'object' ? p.category?.name : (p.category || '')
+      return `<tr><td>0x${p.id}</td><td>${p.name}</td><td>Item</td><td>${catName}</td><td></td><td>Active</td>${emptyCols}</tr>`
     }).join('')
+
     const html = `<html><head><meta charset="UTF-8"></head><body><table border="1">
 <tr><th>ItemID</th><th>ItemName</th><th>ItemType</th><th>AddonArea</th><th>SapCode</th><th>ItemStatus</th>${rmHeaders}</tr>
-${sampleRows}
+${exampleRow}
+${productRows}
 </table></body></html>`
     const blob = new Blob([html], { type: 'application/vnd.ms-excel' })
     const url  = URL.createObjectURL(blob)
