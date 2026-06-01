@@ -407,6 +407,12 @@ export default function RecipeListPage({
 
                 <td style={TD}>
                   <div style={{ fontWeight:500, fontSize:13 }}>{recipe.productName}</div>
+                  {recipe.variantName && (
+                    <span style={{ fontSize:11, background:'#eff6ff', color:'#3b82f6',
+                      padding:'1px 7px', borderRadius:10, fontWeight:600, marginTop:2, display:'inline-block' }}>
+                      {recipe.variantName}
+                    </span>
+                  )}
                 </td>
 
                 <td style={{ ...TD, fontSize:12 }}>

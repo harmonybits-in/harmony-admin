@@ -25,10 +25,13 @@ const TH = { padding:'11px 16px', textAlign:'left', fontSize:11, color:'#888', f
 
 export default function AddRecipePage({ products, rawMaterials, editProduct, editRecipeId, rid, onSave, onCancel }) {
   const toast = useToast()
-  const [selectedProductId, setSelectedProductId] = useState(editProduct?.id || null)
+  const [selectedProductId,  setSelectedProductId]  = useState(editProduct?.id || null)
+  const [selectedVariantId,  setSelectedVariantId]  = useState(editProduct?.variantId || null)
   const [saving, setSaving] = useState(false)
 
-  const selectedProduct = products.find(p => p.id === selectedProductId)
+  const selectedProduct  = products.find(p => p.id === selectedProductId)
+  const productVariants  = (selectedProduct?.productVariants || []).map(pv => pv.variant).filter(Boolean)
+  const selectedVariant  = productVariants.find(v => v.id === selectedVariantId) || null
 
   // Recipe rows: each = { rawMaterialId, quantity, unit, area }
   const [rows, setRows] = useState([
@@ -64,12 +67,14 @@ export default function AddRecipePage({ products, rawMaterials, editProduct, edi
     try {
       const payload = {
         restaurantId: rid,
-        productId: selectedProductId,
+        productId:    selectedProductId,
+        variantId:    selectedVariantId || null,
+        variantName:  selectedVariant?.name || null,
         ingredients: validRows.map(r => ({
           rawMaterialId: r.rawMaterialId,
           quantity: Number(r.quantity),
           unit: r.unit,
-          areas: r.areas,
+          areas: Array.isArray(r.areas) ? r.areas.join(',') : (r.areas || ''),
         })),
       }
       if (editRecipeId) {
@@ -112,11 +117,48 @@ export default function AddRecipePage({ products, rawMaterials, editProduct, edi
               <div style={{ flex:1, maxWidth:340 }}>
                 <SearchSelect
                   value={selectedProductId}
-                  onChange={setSelectedProductId}
+                  onChange={v => { setSelectedProductId(v); setSelectedVariantId(null) }}
                   options={products}
                   placeholder="Select menu item..."
                 />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Variant Selector (shown only if product has variants) ── */}
+        {selectedProductId && productVariants.length > 0 && (
+          <div style={{ background:'#fff', border:'1px solid #e8eaed', borderRadius:10,
+            padding:'14px 24px', marginBottom:18,
+            boxShadow:'0 1px 4px rgba(0,0,0,.04)', display:'flex', alignItems:'center', gap:24 }}>
+            <label style={{ fontSize:14, fontWeight:600, color:'#333', flexShrink:0 }}>
+              Select Variant
+            </label>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <button
+                onClick={() => setSelectedVariantId(null)}
+                style={{
+                  padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600,
+                  cursor:'pointer', border:'1px solid',
+                  borderColor: selectedVariantId === null ? '#e53e3e' : '#dde1e7',
+                  background:  selectedVariantId === null ? '#fff5f5' : '#fff',
+                  color:       selectedVariantId === null ? '#e53e3e' : '#555',
+                }}>
+                All Variants (Base)
+              </button>
+              {productVariants.map(v => (
+                <button key={v.id}
+                  onClick={() => setSelectedVariantId(v.id)}
+                  style={{
+                    padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600,
+                    cursor:'pointer', border:'1px solid',
+                    borderColor: selectedVariantId === v.id ? '#e53e3e' : '#dde1e7',
+                    background:  selectedVariantId === v.id ? '#fff5f5' : '#fff',
+                    color:       selectedVariantId === v.id ? '#e53e3e' : '#555',
+                  }}>
+                  {v.name}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -129,8 +171,20 @@ export default function AddRecipePage({ products, rawMaterials, editProduct, edi
             {/* Table header */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
               padding:'14px 20px', borderBottom:'1px solid #f0f0f0', background:'#fafafa' }}>
-              <span style={{ fontSize:14, fontWeight:700, color:'#333' }}>
+              <span style={{ fontSize:14, fontWeight:700, color:'#333', display:'flex', alignItems:'center', gap:8 }}>
                 Recipe For {selectedProduct?.name}
+                {selectedVariant && (
+                  <span style={{ fontSize:12, background:'#eff6ff', color:'#3b82f6',
+                    padding:'2px 8px', borderRadius:12, fontWeight:600 }}>
+                    {selectedVariant.name}
+                  </span>
+                )}
+                {!selectedVariant && productVariants.length > 0 && (
+                  <span style={{ fontSize:12, background:'#f0fdf4', color:'#16a34a',
+                    padding:'2px 8px', borderRadius:12, fontWeight:600 }}>
+                    All Variants (Base)
+                  </span>
+                )}
               </span>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={addRow} style={{

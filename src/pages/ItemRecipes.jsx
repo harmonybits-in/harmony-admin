@@ -108,19 +108,42 @@ export default function ItemRecipes() {
   useEffect(() => { loadData() }, [loadData])
 
   // Merge products + recipes → list for RecipeListPage
-  // - category: parent category name (for tab grouping)
-  // - subCategory: actual subcategory name (for display in table)
-  const mergedRecipes = products.map(p => {
-    const rec = recipes.find(r => r.productId === p.id)
-    return {
-      id:          p.id,
+  // Expands products with variants into multiple rows: base + one per variant
+  const mergedRecipes = []
+  products.forEach(p => {
+    const catName    = resolveCategoryName(p, catById)
+    const subCatName = getRawCategoryName(p)
+    const variants   = (p.productVariants || []).map(pv => pv.variant).filter(Boolean)
+
+    // Base recipe row (variantId = null → applies to all variants)
+    const baseRec = recipes.find(r => r.productId === p.id && !r.variantId)
+    mergedRecipes.push({
+      id:          `${p.id}-base`,
       productId:   p.id,
       productName: p.name,
-      category:    resolveCategoryName(p, catById),   // parent category → tab grouping
-      subCategory: getRawCategoryName(p),              // actual category for table display
-      hasRecipe:   !!rec,
-      recipeId:    rec?.id || null,
-    }
+      variantId:   null,
+      variantName: null,
+      category:    catName,
+      subCategory: subCatName,
+      hasRecipe:   !!baseRec,
+      recipeId:    baseRec?.id || null,
+    })
+
+    // One row per variant (only if product has variants)
+    variants.forEach(v => {
+      const varRec = recipes.find(r => r.productId === p.id && r.variantId === v.id)
+      mergedRecipes.push({
+        id:          `${p.id}-${v.id}`,
+        productId:   p.id,
+        productName: p.name,
+        variantId:   v.id,
+        variantName: v.name,
+        category:    catName,
+        subCategory: subCatName,
+        hasRecipe:   !!varRec,
+        recipeId:    varRec?.id || null,
+      })
+    })
   })
 
   // ── Template download ──────────────────────────────────────────────
@@ -178,7 +201,10 @@ ${sampleRows}
 
   function handleAdd()        { setEditItem(null); setEditRecipeId(null); setView('add') }
   function handleEdit(recipe) {
-    setEditItem({ id: recipe.productId, name: recipe.productName })
+    setEditItem({
+      id: recipe.productId, name: recipe.productName,
+      variantId: recipe.variantId || null, variantName: recipe.variantName || null,
+    })
     setEditRecipeId(recipe.recipeId || null)
     setView('edit')
   }
