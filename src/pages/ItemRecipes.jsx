@@ -74,7 +74,7 @@ export default function ItemRecipes() {
     try {
       const [prods, raws, recs, cats] = await Promise.all([
         api.get(`/products?restaurantId=${rid}&size=500`).catch(() => null),
-        api.get(`/inv/raw-materials?restaurantId=${rid}`).catch(() => null),
+        api.get(`/inv/raw-materials?restaurantId=${rid}&activeOnly=false&size=500`).catch(() => null),
         api.get(`/inv/recipes?restaurantId=${rid}&size=500`).catch(() => null),
         api.get(`/categories?restaurantId=${rid}`).catch(() => null),
       ])
