@@ -69,7 +69,7 @@ function Dropdown({ trigger, items }) {
 
 export default function RecipeListPage({
   products, rawMaterials, recipes, onAdd, onEdit, onDeleteRecipe,
-  onDownloadTemplate, onImport, importing
+  onDownloadTemplate, onImport, importing, onBulkEdit
 }) {
   const toast = useToast()
   const [filterItem,   setFilterItem]   = useState('')
@@ -194,8 +194,8 @@ export default function RecipeListPage({
     },
     {
       icon: '✏️', label: 'Bulk Recipe Editor',
-      sub: 'Edit multiple recipes at once',
-      onClick: () => toast.error('Coming soon'),
+      sub: 'Ek ingredient ke saare recipes ek saath edit karo',
+      onClick: onBulkEdit,
     },
     {
       icon: '⧉', label: 'Replicate Recipe',

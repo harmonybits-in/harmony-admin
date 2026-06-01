@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { useToast } from '../hooks/useToast'
 import AddRecipePage from '../components/inventory/AddRecipePage'
 import RecipeListPage from '../components/inventory/RecipeListPage'
+import BulkRecipeEditor from '../components/inventory/BulkRecipeEditor'
 
 const MOCK_PRODUCTS = [
   { id:1,  name:'Chat Spiral',               category:'French Fries'    },
@@ -226,8 +227,11 @@ ${productRows}
     setEditIngredients(fullRecipe?.ingredients || null)
     setView('edit')
   }
-  function handleBack()  { setView('list'); setEditItem(null); setEditRecipeId(null); setEditIngredients(null) }
-  function handleSave()  { loadData(); setView('list'); setEditItem(null); setEditRecipeId(null); setEditIngredients(null) }
+  function handleBack()       { setView('list'); setEditItem(null); setEditRecipeId(null); setEditIngredients(null) }
+  function handleSave()       { loadData(); setView('list'); setEditItem(null); setEditRecipeId(null); setEditIngredients(null) }
+  function handleBulkEdit()   { setView('bulk') }
+  function handleBulkBack()   { setView('list') }
+  function handleBulkSaved()  { loadData() }
 
   if (view === 'add' || view === 'edit') {
     return (
@@ -240,6 +244,18 @@ ${productRows}
         rid={rid}
         onSave={handleSave}
         onCancel={handleBack}
+      />
+    )
+  }
+
+  if (view === 'bulk') {
+    return (
+      <BulkRecipeEditor
+        rawMaterials={rawMaterials}
+        recipes={recipes}
+        rid={rid}
+        onBack={handleBulkBack}
+        onSaved={handleBulkSaved}
       />
     )
   }
@@ -258,6 +274,7 @@ ${productRows}
         onDownloadTemplate={downloadTemplate}
         onImport={() => importRef.current?.click()}
         importing={importing}
+        onBulkEdit={handleBulkEdit}
       />
     </>
   )
