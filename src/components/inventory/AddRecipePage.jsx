@@ -23,7 +23,7 @@ const TD = { padding:'12px 16px', fontSize:13, borderBottom:'1px solid #f0f0f0',
 const TH = { padding:'11px 16px', textAlign:'left', fontSize:11, color:'#888', fontWeight:700,
   borderBottom:'2px solid #f0f0f0', background:'#fafafa', whiteSpace:'nowrap' }
 
-export default function AddRecipePage({ products, rawMaterials, editProduct, editRecipeId, rid, onSave, onCancel }) {
+export default function AddRecipePage({ products, rawMaterials, editProduct, editRecipeId, editIngredients, rid, onSave, onCancel }) {
   const toast = useToast()
   const [selectedProductId,  setSelectedProductId]  = useState(editProduct?.id || null)
   const [selectedVariantId,  setSelectedVariantId]  = useState(editProduct?.variantId || null)
@@ -33,10 +33,19 @@ export default function AddRecipePage({ products, rawMaterials, editProduct, edi
   const productVariants  = (selectedProduct?.productVariants || []).map(pv => pv.variant).filter(Boolean)
   const selectedVariant  = productVariants.find(v => v.id === selectedVariantId) || null
 
-  // Recipe rows: each = { rawMaterialId, quantity, unit, area }
-  const [rows, setRows] = useState([
-    { id:Date.now(), rawMaterialId:null, quantity:'', unit:'', areas:[] },
-  ])
+  // Recipe rows: each = { rawMaterialId, quantity, unit, areas }
+  const [rows, setRows] = useState(() => {
+    if (editIngredients && editIngredients.length > 0) {
+      return editIngredients.map(ing => ({
+        id:            ing.id || Date.now() + Math.random(),
+        rawMaterialId: ing.rawMaterialId,
+        quantity:      String(ing.quantity ?? ''),
+        unit:          ing.unit || '',
+        areas:         ing.areas ? ing.areas.split(',').filter(Boolean) : [],
+      }))
+    }
+    return [{ id:Date.now(), rawMaterialId:null, quantity:'', unit:'', areas:[] }]
+  })
 
   function addRow() {
     setRows(rs => [...rs, { id:Date.now(), rawMaterialId:null, quantity:'', unit:'', areas:[] }])

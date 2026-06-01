@@ -60,10 +60,11 @@ export default function ItemRecipes() {
   const toast = useToast()
   const importRef = useRef()
 
-  const [view,         setView]         = useState('list')
-  const [editItem,     setEditItem]     = useState(null)
-  const [editRecipeId, setEditRecipeId] = useState(null)
-  const [importing,    setImporting]    = useState(false)
+  const [view,           setView]         = useState('list')
+  const [editItem,       setEditItem]     = useState(null)
+  const [editRecipeId,   setEditRecipeId] = useState(null)
+  const [editIngredients,setEditIngredients] = useState(null)
+  const [importing,      setImporting]    = useState(false)
 
   const [products,     setProducts]     = useState(MOCK_PRODUCTS)
   const [rawMaterials, setRawMaterials] = useState(MOCK_RAW)
@@ -199,17 +200,20 @@ ${sampleRows}
     } finally { setImporting(false) }
   }
 
-  function handleAdd()        { setEditItem(null); setEditRecipeId(null); setView('add') }
+  function handleAdd()        { setEditItem(null); setEditRecipeId(null); setEditIngredients(null); setView('add') }
   function handleEdit(recipe) {
     setEditItem({
       id: recipe.productId, name: recipe.productName,
       variantId: recipe.variantId || null, variantName: recipe.variantName || null,
     })
     setEditRecipeId(recipe.recipeId || null)
+    // Pass existing ingredients so AddRecipePage can pre-populate rows
+    const fullRecipe = recipes.find(r => r.id === recipe.recipeId)
+    setEditIngredients(fullRecipe?.ingredients || null)
     setView('edit')
   }
-  function handleBack()  { setView('list'); setEditItem(null); setEditRecipeId(null) }
-  function handleSave()  { loadData(); setView('list'); setEditItem(null); setEditRecipeId(null) }
+  function handleBack()  { setView('list'); setEditItem(null); setEditRecipeId(null); setEditIngredients(null) }
+  function handleSave()  { loadData(); setView('list'); setEditItem(null); setEditRecipeId(null); setEditIngredients(null) }
 
   if (view === 'add' || view === 'edit') {
     return (
@@ -218,6 +222,7 @@ ${sampleRows}
         rawMaterials={rawMaterials}
         editProduct={editItem}
         editRecipeId={editRecipeId}
+        editIngredients={editIngredients}
         rid={rid}
         onSave={handleSave}
         onCancel={handleBack}
