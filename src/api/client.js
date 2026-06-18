@@ -31,11 +31,14 @@ async function request(path, opts = {}) {
     },
   })
 
-  // 401 = token missing/invalid, 403 = token expired (Spring Security stateless)
-  // Both mean the session is dead — logout and redirect
-  if (res.status === 401 || res.status === 403) {
+  // 401 = token missing/invalid/expired → session dead, force logout
+  // 403 = valid token but insufficient permissions → throw error, do NOT logout
+  if (res.status === 401) {
     forceLogout()
     return null
+  }
+  if (res.status === 403) {
+    throw new Error('You do not have permission to perform this action.')
   }
 
   if (!res.ok) {
