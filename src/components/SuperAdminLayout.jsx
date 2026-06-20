@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/superadmin/subscriptions', icon: '💳', label: 'Subscriptions'       },
   { to: '/superadmin/addons',        icon: '🔌', label: 'Feature Addons'      },
   { to: '/superadmin/riders',        icon: '🛵', label: 'Riders'              },
+  { to: '/erp',                      icon: '📊', label: 'ERP System'          },
 ]
 
 function NavItem({ to, icon, label, end }) {

@@ -777,6 +777,51 @@ export const tableOpsApi = {
   split: (rid, id)           => api.post(`/tables/${id}/split`, {}),
 }
 
+// ── ERP API ─────────────────────────────────────────────────────────
+export const erpAccountApi = {
+  getAll:     (vertical) => api.get(`/erp/accounts${vertical ? `?vertical=${vertical}` : ''}`),
+  create:     (dto)      => api.post('/erp/accounts', dto),
+  update:     (id, dto)  => api.put(`/erp/accounts/${id}`, dto),
+  deactivate: (id)       => api.delete(`/erp/accounts/${id}`),
+}
+
+export const erpVoucherApi = {
+  getAll:  (params) => api.get(`/erp/vouchers?${new URLSearchParams(params).toString()}`),
+  getById: (id)     => api.get(`/erp/vouchers/${id}`),
+  create:  (dto)    => api.post('/erp/vouchers', dto),
+  cancel:  (id)     => api.post(`/erp/vouchers/${id}/cancel`, {}),
+}
+
+export const erpReportApi = {
+  trialBalance: (params) => api.get(`/erp/reports/trial-balance?${new URLSearchParams(params).toString()}`),
+  pnl:          (params) => api.get(`/erp/reports/pnl?${new URLSearchParams(params).toString()}`),
+  balanceSheet: (params) => api.get(`/erp/reports/balance-sheet?${new URLSearchParams(params).toString()}`),
+}
+
+export const erpGstApi = {
+  gstr1:  (month, vertical) => api.get(`/erp/gst/gstr1?month=${month}${vertical ? `&vertical=${vertical}` : ''}`),
+  gstr3b: (month)           => api.get(`/erp/gst/gstr3b?month=${month}`),
+  getHsnSac: ()             => api.get('/erp/hsn-sac'),
+  createHsnSac: (dto)       => api.post('/erp/hsn-sac', dto),
+  updateHsnSac: (id, dto)   => api.put(`/erp/hsn-sac/${id}`, dto),
+}
+
+export const erpEmployeeApi = {
+  getAll:     (vertical) => api.get(`/erp/employees${vertical ? `?vertical=${vertical}` : ''}`),
+  create:     (dto)      => api.post('/erp/employees', dto),
+  update:     (id, dto)  => api.put(`/erp/employees/${id}`, dto),
+  deactivate: (id)       => api.delete(`/erp/employees/${id}`),
+}
+
+export const erpPayrollApi = {
+  getRuns:     ()            => api.get('/erp/payroll/runs'),
+  createRun:   (month)       => api.post('/erp/payroll/runs', { month }),
+  getRun:      (id)          => api.get(`/erp/payroll/runs/${id}`),
+  computeRun:  (id)          => api.post(`/erp/payroll/runs/${id}/compute`, {}),
+  approveRun:  (id)          => api.post(`/erp/payroll/runs/${id}/approve`, {}),
+  getPayslip:  (runId, empId) => api.get(`/erp/payroll/runs/${runId}/payslip/${empId}`),
+}
+
 // ── FSSAI Compliance ──────────────────────────────────────────────
 export const fssaiApi = {
   dashboard:       ()          => api.get('/fssai/dashboard'),

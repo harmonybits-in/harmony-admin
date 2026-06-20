@@ -109,6 +109,20 @@ import SARestaurants       from './pages/superadmin/SARestaurants'
 import SASubscriptions     from './pages/superadmin/SASubscriptions'
 import SAAddons            from './pages/superadmin/SAAddons'
 import SARiders            from './pages/superadmin/SARiders'
+import ERPLayout           from './components/ERPLayout'
+import ERPDashboard        from './pages/erp/ERPDashboard'
+import ChartOfAccounts     from './pages/erp/ChartOfAccounts'
+import VoucherList         from './pages/erp/VoucherList'
+import VoucherEntry        from './pages/erp/VoucherEntry'
+import TrialBalance        from './pages/erp/TrialBalance'
+import PnlStatement        from './pages/erp/PnlStatement'
+import BalanceSheet        from './pages/erp/BalanceSheet'
+import HsnSacMaster        from './pages/erp/HsnSacMaster'
+import Gstr1Report         from './pages/erp/Gstr1Report'
+import Gstr3bReport        from './pages/erp/Gstr3bReport'
+import EmployeeMaster      from './pages/erp/EmployeeMaster'
+import PayrollRun          from './pages/erp/PayrollRun'
+import PayslipView         from './pages/erp/PayslipView'
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuthStore()
@@ -231,6 +245,24 @@ export default function App() {
           <Route path="fssai-compliance"  element={<FssaiCompliance />} />
         </Route>
         <Route path="/menu-board/:restaurantId" element={<DigitalMenuBoard />} />
+
+        {/* ── ERP Console ── */}
+        <Route path="/erp" element={<SuperAdminRoute><ERPLayout /></SuperAdminRoute>}>
+          <Route index element={<ERPDashboard />} />
+          <Route path="accounts" element={<ChartOfAccounts />} />
+          <Route path="vouchers" element={<VoucherList />} />
+          <Route path="vouchers/new" element={<VoucherEntry />} />
+          <Route path="vouchers/:id" element={<VoucherEntry />} />
+          <Route path="trial-balance" element={<TrialBalance />} />
+          <Route path="pnl" element={<PnlStatement />} />
+          <Route path="balance-sheet" element={<BalanceSheet />} />
+          <Route path="hsn-sac" element={<HsnSacMaster />} />
+          <Route path="gstr1" element={<Gstr1Report />} />
+          <Route path="gstr3b" element={<Gstr3bReport />} />
+          <Route path="employees" element={<EmployeeMaster />} />
+          <Route path="payroll-runs" element={<PayrollRun />} />
+          <Route path="payroll-runs/:runId/payslip/:empId" element={<PayslipView />} />
+        </Route>
 
         {/* ── Super Admin Console ── */}
         <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminLayout /></SuperAdminRoute>}>
